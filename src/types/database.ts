@@ -143,7 +143,44 @@ export type Database = {
       logs: Tabela<Log, "acao", "id" | "criado_em">;
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      criar_requerimento: {
+        Args: {
+          p_numero: string;
+          p_vereador: string;
+          p_assunto: string;
+          p_recebido_em: string;
+          p_dias_total: number;
+        };
+        Returns: string;
+      };
+      distribuir_requerimento: {
+        Args: { p_requerimento: string; p_secretarias: string[] };
+        Returns: undefined;
+      };
+      marcar_respondida: {
+        Args: { p_requerimento: string; p_secretaria: string };
+        Returns: undefined;
+      };
+      solicitar_prorrogacao: {
+        Args: { p_requerimento: string; p_dias: number; p_motivo: string };
+        Returns: undefined;
+      };
+      devolver_a_camara: {
+        Args: { p_requerimento: string; p_protocolo: string };
+        Returns: undefined;
+      };
+      definir_acesso: {
+        Args: {
+          p_email: string;
+          p_nome: string;
+          p_perfil: PerfilUsuario;
+          p_secretaria_id: string | null;
+          p_ativo: boolean;
+        };
+        Returns: string;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
