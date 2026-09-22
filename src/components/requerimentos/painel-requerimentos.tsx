@@ -1,12 +1,23 @@
 "use client";
 
 import * as React from "react";
+import {
+  AlertTriangle,
+  ArrowRightCircle,
+  CheckCheck,
+  FileStack,
+  Hourglass,
+  Inbox,
+  Search,
+  SlidersHorizontal,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ModalExportar } from "@/components/ui/modal-exportar";
 import { BarraPrazo } from "@/components/requerimentos/barra-prazo";
 import { useAcao } from "@/lib/hooks/usar-acao";
-import { ESTILO_CAMPO_PADRAO as ESTILO_CAMPO } from "@/lib/utils";
+import { ESTILO_CAMPO_PADRAO as ESTILO_CAMPO, cn } from "@/lib/utils";
 import {
   criarRequerimento,
   distribuirRequerimento,
@@ -16,11 +27,46 @@ import {
 } from "@/lib/actions/requerimentos";
 import type { RequerimentoDaLista } from "@/lib/dados/requerimentos";
 import type { Fase } from "@/lib/requerimentos/status";
-import { COR_FASE, ROTULO_FASE, COR_ATRASADO } from "@/lib/requerimentos/cores-fase";
+import {
+  COR_FASE,
+  COR_FASE_VIVA,
+  ROTULO_FASE,
+  COR_ATRASADO,
+  COR_ATRASADO_VIVA,
+} from "@/lib/requerimentos/cores-fase";
 import { dataNoFuso } from "@/lib/fuso";
+import type { ColunaExportavel, GrupoTotalizacao } from "@/lib/exportar-xlsx";
 import type { ConfigPrazo, Secretaria, Usuario } from "@/types/database";
 
 type FiltroCartao = "todos" | "atrasados" | Fase;
+
+const EXPORT_COLS: ColunaExportavel<RequerimentoDaLista>[] = [
+  { key: "numero", rotulo: "Nº", valor: (r) => r.numero },
+  { key: "vereador", rotulo: "Vereador", valor: (r) => r.vereador },
+  { key: "assunto", rotulo: "Assunto", valor: (r) => r.assunto },
+  {
+    key: "secretarias",
+    rotulo: "Secretarias",
+    valor: (r) => r.secretarias.map((s) => s.nomeSecretaria).join(", ") || "—",
+  },
+  { key: "recebido_em", rotulo: "Recebido em", valor: (r) => r.recebidoEm },
+  { key: "dias_total", rotulo: "Prazo total (dias)", valor: (r) => r.diasTotal },
+  { key: "dias_restantes", rotulo: "Dias restantes", valor: (r) => r.diasRestantes },
+  { key: "distribuido_em", rotulo: "Distribuído em", valor: (r) => r.distribuidoEm ?? "" },
+  { key: "devolvido_em", rotulo: "Devolvido em", valor: (r) => r.devolvidoEm ?? "" },
+  { key: "protocolo", rotulo: "Protocolo devolução", valor: (r) => r.protocoloDevolucao ?? "" },
+  { key: "fase", rotulo: "Status", valor: (r) => ROTULO_FASE[r.fase] },
+  { key: "atrasado", rotulo: "Atrasado", valor: (r) => (r.atrasado ? "Sim" : "Não") },
+];
+
+const GRUPOS_TOTALIZACAO: GrupoTotalizacao<RequerimentoDaLista>[] = [
+  { chave: "fase", rotulo: "por Status", chavesDaLinha: (r) => [ROTULO_FASE[r.fase]] },
+  {
+    chave: "secretaria",
+    rotulo: "por Secretaria",
+    chavesDaLinha: (r) => (r.secretarias.length > 0 ? r.secretarias.map((s) => s.nomeSecretaria) : ["—"]),
+  },
+];
 
 export function PainelRequerimentos({
   requerimentosIniciais,
@@ -39,6 +85,12 @@ export function PainelRequerimentos({
   const [filtro, setFiltro] = React.useState<FiltroCartao>("todos");
   const [linhaExpandida, setLinhaExpandida] = React.useState<string | null>(null);
   const [modalNovoAberto, setModalNovoAberto] = React.useState(false);
+  const [exportarAberto, setExportarAberto] = React.useState(false);
+  const [mostrarMaisFiltros, setMostrarMaisFiltros] = React.useState(false);
+  const [secretariaFiltro, setSecretariaFiltro] = React.useState("");
+  const [vereadorFiltro, setVereadorFiltro] = React.useState("");
+  const [dataInicio, setDataInicio] = React.useState("");
+  const [dataFim, setDataFim] = React.useState("");
 
   const requerimentos = requerimentosIniciais;
 
@@ -58,6 +110,16 @@ export function PainelRequerimentos({
     if (filtro === "atrasados") base = base.filter((r) => r.atrasado);
     else if (filtro !== "todos") base = base.filter((r) => r.fase === filtro);
 
+    if (secretariaFiltro) {
+      base = base.filter((r) => r.secretarias.some((s) => s.secretariaId === secretariaFiltro));
+    }
+    if (vereadorFiltro.trim()) {
+      const v = vereadorFiltro.trim().toLowerCase();
+      base = base.filter((r) => r.vereador.toLowerCase().includes(v));
+    }
+    if (dataInicio) base = base.filter((r) => r.recebidoEm >= dataInicio);
+    if (dataFim) base = base.filter((r) => r.recebidoEm <= dataFim);
+
     const termo = busca.trim().toLowerCase();
     if (!termo) return base;
     return base.filter(
@@ -66,15 +128,84 @@ export function PainelRequerimentos({
         r.vereador.toLowerCase().includes(termo) ||
         r.assunto.toLowerCase().includes(termo)
     );
-  }, [requerimentos, filtro, busca]);
+  }, [requerimentos, filtro, busca, secretariaFiltro, vereadorFiltro, dataInicio, dataFim]);
 
-  const cartoes: { chave: FiltroCartao; rotulo: string; cor: string; valor: number }[] = [
-    { chave: "todos", rotulo: "Todos", cor: "#0C1D33", valor: contagens.todos },
-    { chave: "atrasados", rotulo: "Atrasados", cor: COR_ATRASADO, valor: contagens.atrasados },
-    { chave: "aguardando", rotulo: ROTULO_FASE.aguardando, cor: COR_FASE.aguardando, valor: contagens.aguardando },
-    { chave: "distribuido", rotulo: ROTULO_FASE.distribuido, cor: COR_FASE.distribuido, valor: contagens.distribuido },
-    { chave: "respondido", rotulo: ROTULO_FASE.respondido, cor: COR_FASE.respondido, valor: contagens.respondido },
-    { chave: "devolvido", rotulo: ROTULO_FASE.devolvido, cor: COR_FASE.devolvido, valor: contagens.devolvido },
+  function limparMaisFiltros() {
+    setSecretariaFiltro("");
+    setVereadorFiltro("");
+    setDataInicio("");
+    setDataFim("");
+  }
+
+  function resumoFiltros(): string {
+    const partes: string[] = [];
+    if (busca) partes.push(`Busca: "${busca}"`);
+    if (filtro !== "todos") {
+      partes.push(`Status: ${filtro === "atrasados" ? "Atrasados" : ROTULO_FASE[filtro as Fase]}`);
+    }
+    if (secretariaFiltro) {
+      partes.push(`Secretaria: ${secretarias.find((s) => s.id === secretariaFiltro)?.nome ?? secretariaFiltro}`);
+    }
+    if (vereadorFiltro) partes.push(`Vereador: "${vereadorFiltro}"`);
+    if (dataInicio) partes.push(`De: ${dataInicio}`);
+    if (dataFim) partes.push(`Até: ${dataFim}`);
+    return partes.length > 0 ? partes.join(" · ") : "Nenhum filtro aplicado — todos os requerimentos visíveis";
+  }
+
+  function nomeArquivoBase(): string {
+    const data = dataNoFuso(new Date());
+    return `requerimentos-camara-${data}`;
+  }
+
+  const cartoes: {
+    chave: FiltroCartao;
+    rotulo: string;
+    cor: string;
+    corNumero: string;
+    valor: number;
+    Icone: typeof FileStack;
+  }[] = [
+    { chave: "todos", rotulo: "Todos", cor: "#0C1D33", corNumero: "#0C1D33", valor: contagens.todos, Icone: FileStack },
+    {
+      chave: "atrasados",
+      rotulo: "Atrasados",
+      cor: COR_ATRASADO_VIVA,
+      corNumero: COR_ATRASADO,
+      valor: contagens.atrasados,
+      Icone: AlertTriangle,
+    },
+    {
+      chave: "aguardando",
+      rotulo: ROTULO_FASE.aguardando,
+      cor: COR_FASE_VIVA.aguardando,
+      corNumero: COR_FASE.aguardando,
+      valor: contagens.aguardando,
+      Icone: Inbox,
+    },
+    {
+      chave: "distribuido",
+      rotulo: ROTULO_FASE.distribuido,
+      cor: COR_FASE_VIVA.distribuido,
+      corNumero: COR_FASE.distribuido,
+      valor: contagens.distribuido,
+      Icone: Hourglass,
+    },
+    {
+      chave: "respondido",
+      rotulo: ROTULO_FASE.respondido,
+      cor: COR_FASE_VIVA.respondido,
+      corNumero: COR_FASE.respondido,
+      valor: contagens.respondido,
+      Icone: ArrowRightCircle,
+    },
+    {
+      chave: "devolvido",
+      rotulo: ROTULO_FASE.devolvido,
+      cor: COR_FASE_VIVA.devolvido,
+      corNumero: COR_FASE.devolvido,
+      valor: contagens.devolvido,
+      Icone: CheckCheck,
+    },
   ];
 
   return (
@@ -87,37 +218,136 @@ export function PainelRequerimentos({
               key={c.chave}
               type="button"
               onClick={() => setFiltro(c.chave)}
-              className="rounded-lg border bg-white p-3 text-left shadow-sm transition-colors"
+              aria-pressed={ativo}
               style={{
-                borderColor: ativo ? `${c.cor}66` : undefined,
-                boxShadow: ativo ? `0 0 0 1px ${c.cor}22` : undefined,
-                borderTopColor: c.cor,
-                borderTopWidth: 3,
+                borderColor: ativo ? `${c.cor}66` : "rgba(12,29,51,0.08)",
+                boxShadow: ativo
+                  ? `0 0 0 3px ${c.cor}22, 0 8px 20px rgba(12,29,51,0.1)`
+                  : "0 2px 8px rgba(12,29,51,0.04)",
               }}
+              className={cn(
+                "group relative flex cursor-pointer flex-col items-start overflow-hidden rounded-2xl border p-3.5 text-left backdrop-blur-[10px] transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cataguases-azul focus-visible:ring-offset-2",
+                ativo ? "bg-white" : "bg-white/70 hover:-translate-y-0.5 hover:bg-white/95"
+              )}
             >
-              <p className="text-xl font-semibold" style={{ color: c.cor }}>
+              <span
+                aria-hidden
+                className="absolute inset-x-0 top-0 h-[3px] transition-opacity duration-200"
+                style={{ backgroundColor: c.cor, opacity: ativo ? 1 : 0 }}
+              />
+              <span
+                className="flex h-8 w-8 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-105"
+                style={{ backgroundColor: `${c.cor}1F`, color: c.corNumero }}
+              >
+                <c.Icone className="h-4 w-4" strokeWidth={2.1} aria-hidden />
+              </span>
+              <p
+                className="mt-2.5 text-xl font-bold leading-none tracking-[-0.02em] tabular-nums"
+                style={{ color: c.corNumero }}
+              >
                 {c.valor}
               </p>
-              <p className="mt-0.5 text-[11px] leading-tight text-slate-500">{c.rotulo}</p>
+              <p
+                className={cn(
+                  "mt-1.5 text-[11px] font-medium leading-tight",
+                  ativo ? "text-cataguases-marinho" : "text-slate-500"
+                )}
+              >
+                {c.rotulo}
+              </p>
             </button>
           );
         })}
       </div>
 
-      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <input
-          type="search"
-          placeholder="Buscar por nº, vereador ou assunto…"
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          className={`${ESTILO_CAMPO} w-full sm:max-w-sm`}
-        />
-        {podeDistribuir && (
-          <Button onClick={() => setModalNovoAberto(true)} className="shrink-0">
-            Novo requerimento
+      <div className="mt-4 flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-2.5 sm:flex-row sm:items-center">
+        <div className="relative min-w-[200px] flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
+          <input
+            type="search"
+            placeholder="Buscar por nº, vereador ou assunto…"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            className={`${ESTILO_CAMPO} w-full pl-8`}
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setMostrarMaisFiltros((v) => !v)}
+            className={cn(mostrarMaisFiltros && "border-cataguases-azul text-cataguases-azul")}
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
+            Mais filtros
           </Button>
-        )}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={visiveis.length === 0}
+            onClick={() => setExportarAberto(true)}
+          >
+            Exportar
+          </Button>
+          {podeDistribuir && (
+            <Button size="sm" onClick={() => setModalNovoAberto(true)} className="shrink-0">
+              Novo requerimento
+            </Button>
+          )}
+        </div>
       </div>
+
+      {mostrarMaisFiltros && (
+        <div className="mt-2 grid grid-cols-1 gap-2.5 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <label className="text-xs text-slate-500">Secretaria</label>
+            <select
+              value={secretariaFiltro}
+              onChange={(e) => setSecretariaFiltro(e.target.value)}
+              className={`${ESTILO_CAMPO} mt-1 w-full`}
+            >
+              <option value="">Todas</option>
+              {secretarias.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-slate-500">Vereador</label>
+            <input
+              value={vereadorFiltro}
+              onChange={(e) => setVereadorFiltro(e.target.value)}
+              placeholder="Nome do vereador"
+              className={`${ESTILO_CAMPO} mt-1 w-full`}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500">Recebido de</label>
+            <input
+              type="date"
+              value={dataInicio}
+              onChange={(e) => setDataInicio(e.target.value)}
+              className={`${ESTILO_CAMPO} mt-1 w-full`}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500">Recebido até</label>
+            <input
+              type="date"
+              value={dataFim}
+              onChange={(e) => setDataFim(e.target.value)}
+              className={`${ESTILO_CAMPO} mt-1 w-full`}
+            />
+          </div>
+          <div className="sm:col-span-2 lg:col-span-4">
+            <Button variant="ghost" size="sm" onClick={limparMaisFiltros}>
+              Limpar filtros
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table className="w-full min-w-[760px] text-sm">
@@ -221,6 +451,19 @@ export function PainelRequerimentos({
           diasPadrao={config.prazo_padrao_dias}
         />
       )}
+
+      <ModalExportar
+        key={exportarAberto ? "aberto" : "fechado"}
+        aberto={exportarAberto}
+        onFechar={() => setExportarAberto(false)}
+        tituloRelatorio="Requerimentos da Câmara — Prefeitura de Cataguases"
+        colunas={EXPORT_COLS}
+        linhasFiltradas={visiveis}
+        linhasTodas={requerimentos}
+        grupos={GRUPOS_TOTALIZACAO}
+        nomeArquivoBase={nomeArquivoBase()}
+        contextoAdicional={`Filtros aplicados: ${resumoFiltros()}`}
+      />
     </div>
   );
 }

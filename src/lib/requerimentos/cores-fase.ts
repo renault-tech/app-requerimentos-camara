@@ -24,3 +24,18 @@ export const ROTULO_FASE: Record<Fase, string> = {
 };
 
 export const COR_ATRASADO = "#C0392B";
+
+/**
+ * Cores VIVAS do semáforo — só para preenchimento/tinta de fundo (barra
+ * superior do cartão, tinta do ícone com opacidade), nunca como texto
+ * direto. Mesmo par cor/corNúmero já usado nos cartões-filtro de
+ * `painel-processos.tsx` no App-Compras.
+ */
+export const COR_FASE_VIVA: Record<Fase, string> = {
+  aguardando: "#378ADD",
+  distribuido: "#EF9F27",
+  respondido: "#639922",
+  devolvido: "#94A3B8",
+};
+
+export const COR_ATRASADO_VIVA = "#E24B4A";
