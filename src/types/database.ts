@@ -62,6 +62,10 @@ export type RequerimentoSecretaria = {
   requerimento_id: string;
   secretaria_id: string;
   respondida_em: string | null;
+  /** Caminhos no bucket `requerimentos-anexos` (não URLs — bucket privado,
+   * resolvido para signed URL na leitura). Gravado só uma vez, junto com
+   * `respondida_em`, por `marcar_respondida`. */
+  anexos: string[];
 };
 
 export type Prorrogacao = {
@@ -159,7 +163,7 @@ export type Database = {
         Returns: undefined;
       };
       marcar_respondida: {
-        Args: { p_requerimento: string; p_secretaria: string };
+        Args: { p_requerimento: string; p_secretaria: string; p_anexos?: string[] };
         Returns: undefined;
       };
       solicitar_prorrogacao: {

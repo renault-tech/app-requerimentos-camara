@@ -3,11 +3,20 @@ import { calcularDiasRestantes, categoriaPrazo, estaAtrasado, faseDoRequerimento
 import type { CategoriaPrazo, Fase } from "@/lib/requerimentos/status";
 import type { ConfigPrazo, Secretaria } from "@/types/database";
 
+export type AnexoResposta = {
+  /** Caminho no bucket — usado como key estável em listas React. */
+  caminho: string;
+  /** URL assinada (10 min), ou null se a geração falhou — o link some, não quebra a tela. */
+  url: string | null;
+  nomeArquivo: string;
+};
+
 export type SecretariaDoRequerimento = {
   id: string;
   secretariaId: string;
   nomeSecretaria: string;
   respondidaEm: string | null;
+  anexos: AnexoResposta[];
 };
 
 export type RequerimentoDaLista = {
@@ -62,6 +71,23 @@ export async function listarRequerimentos(): Promise<RequerimentoDaLista[]> {
   const nomePorSecretaria = new Map((secretarias ?? []).map((s) => [s.id, s.nome]));
   const hoje = new Date();
 
+  // Bucket privado — resolve todas as signed URLs de uma vez (não uma
+  // chamada por anexo), validade curta (10 min), igual ao padrão já usado
+  // pelo Feedback do App-Compras.
+  const todosOsCaminhos = (vinculos ?? []).flatMap((v) => v.anexos ?? []);
+  const urlPorCaminho = new Map<string, string | null>();
+  if (todosOsCaminhos.length > 0) {
+    const { data: assinadas, error: erroAssinadas } = await supabase.storage
+      .from("requerimentos-anexos")
+      .createSignedUrls(todosOsCaminhos, 600);
+    if (erroAssinadas) {
+      console.error("[listarRequerimentos] falha ao assinar anexos:", erroAssinadas);
+    }
+    for (const a of assinadas ?? []) {
+      if (a.path) urlPorCaminho.set(a.path, a.error ? null : a.signedUrl);
+    }
+  }
+
   return (requerimentos ?? []).map((r) => {
     const secretariasDoRequerimento: SecretariaDoRequerimento[] = (vinculos ?? [])
       .filter((v) => v.requerimento_id === r.id)
@@ -70,6 +96,11 @@ export async function listarRequerimentos(): Promise<RequerimentoDaLista[]> {
         secretariaId: v.secretaria_id,
         nomeSecretaria: nomePorSecretaria.get(v.secretaria_id) ?? "?",
         respondidaEm: v.respondida_em,
+        anexos: (v.anexos ?? []).map((caminho) => ({
+          caminho,
+          url: urlPorCaminho.get(caminho) ?? null,
+          nomeArquivo: caminho.split("/").pop() ?? caminho,
+        })),
       }));
     const fase = faseDoRequerimento(
       { distribuido_em: r.distribuido_em, devolvido_em: r.devolvido_em },

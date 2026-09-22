@@ -85,7 +85,8 @@ export async function distribuirRequerimento(
 
 export async function marcarRespondida(
   requerimentoId: string,
-  secretariaId: string
+  secretariaId: string,
+  anexos: string[] = []
 ): Promise<ResultadoRequerimento> {
   if (!z.uuid().safeParse(requerimentoId).success || !z.uuid().safeParse(secretariaId).success) {
     return { sucesso: false, erro: "Identificador inválido" };
@@ -95,6 +96,7 @@ export async function marcarRespondida(
   const { error } = await supabase.rpc("marcar_respondida", {
     p_requerimento: requerimentoId,
     p_secretaria: secretariaId,
+    p_anexos: anexos,
   });
 
   if (error) {

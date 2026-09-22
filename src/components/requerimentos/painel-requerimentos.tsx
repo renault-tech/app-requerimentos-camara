@@ -8,8 +8,10 @@ import {
   FileStack,
   Hourglass,
   Inbox,
+  Paperclip,
   Search,
   SlidersHorizontal,
+  X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -18,14 +20,16 @@ import { ModalExportar } from "@/components/ui/modal-exportar";
 import { BarraPrazo } from "@/components/requerimentos/barra-prazo";
 import { useAcao } from "@/lib/hooks/usar-acao";
 import { ESTILO_CAMPO_PADRAO as ESTILO_CAMPO, cn } from "@/lib/utils";
+import { criarClienteNavegador } from "@/lib/supabase/client";
 import {
   criarRequerimento,
   distribuirRequerimento,
   marcarRespondida,
   solicitarProrrogacao,
   devolverACamara,
+  type ResultadoRequerimento,
 } from "@/lib/actions/requerimentos";
-import type { RequerimentoDaLista } from "@/lib/dados/requerimentos";
+import type { RequerimentoDaLista, SecretariaDoRequerimento } from "@/lib/dados/requerimentos";
 import type { Fase } from "@/lib/requerimentos/status";
 import {
   COR_FASE,
@@ -480,7 +484,6 @@ function DetalheRequerimento({
   podeDistribuir: boolean;
 }) {
   const acaoDistribuir = useAcao();
-  const acaoResponder = useAcao();
   const acaoProrrogar = useAcao();
   const acaoDevolver = useAcao();
 
@@ -499,41 +502,23 @@ function DetalheRequerimento({
         <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
           Secretarias
         </h3>
-        <ul className="mt-2 space-y-1.5">
+        <ul className="mt-2 space-y-2">
           {requerimento.secretarias.map((s) => {
             const souEu = usuario.perfil === "secretaria" && usuario.secretaria_id === s.secretariaId;
             return (
-              <li key={s.id} className="flex items-center justify-between gap-2 text-sm">
-                <span>
-                  {s.nomeSecretaria}
-                  {s.respondidaEm ? (
-                    <span className="ml-2 text-xs text-green-700">respondida em {s.respondidaEm}</span>
-                  ) : (
-                    <span className="ml-2 text-xs text-slate-400">pendente</span>
-                  )}
-                </span>
-                {!s.respondidaEm && (souEu || podeDistribuir) && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={acaoResponder.pendente}
-                    onClick={() =>
-                      acaoResponder.executar(() => marcarRespondida(requerimento.id, s.secretariaId))
-                    }
-                  >
-                    Marcar respondida
-                  </Button>
-                )}
-              </li>
+              <LinhaSecretaria
+                key={s.id}
+                requerimentoId={requerimento.id}
+                secretaria={s}
+                podeMarcar={souEu || podeDistribuir}
+                ehBaixaPeloGabinete={podeDistribuir && !souEu}
+              />
             );
           })}
           {requerimento.secretarias.length === 0 && (
             <li className="text-sm text-slate-400">Ainda não distribuído.</li>
           )}
         </ul>
-        {acaoResponder.erro && (
-          <p className="mt-2 text-xs text-red-700">{acaoResponder.erro}</p>
-        )}
 
         {podeDistribuir && requerimento.fase !== "devolvido" && secretariasDisponiveis.length > 0 && (
           <div className="mt-3 rounded-md border border-slate-200 bg-white p-3">
@@ -630,6 +615,175 @@ function DetalheRequerimento({
         )}
       </div>
     </div>
+  );
+}
+
+const TAMANHO_MAXIMO_ANEXO = 5 * 1024 * 1024;
+
+/**
+ * Uma secretaria dentro do detalhe de um requerimento: mostra o estado
+ * (pendente/respondida + anexos já enviados) e, para quem pode agir
+ * (a própria secretaria, ou o Gabinete em seu lugar), o formulário de
+ * marcar respondida com anexo opcional do ofício/documento de resposta.
+ * Upload direto do navegador para o Storage (mesmo padrão já usado pelo
+ * Feedback do App-Compras) — só os caminhos resultantes vão para a server
+ * action, nunca o arquivo em si.
+ */
+function LinhaSecretaria({
+  requerimentoId,
+  secretaria,
+  podeMarcar,
+  ehBaixaPeloGabinete,
+}: {
+  requerimentoId: string;
+  secretaria: SecretariaDoRequerimento;
+  podeMarcar: boolean;
+  ehBaixaPeloGabinete: boolean;
+}) {
+  const acao = useAcao();
+  const [respondendo, setRespondendo] = React.useState(false);
+  const [arquivos, setArquivos] = React.useState<File[]>([]);
+  const [avisoArquivo, setAvisoArquivo] = React.useState<string | null>(null);
+
+  function selecionarArquivos(lista: FileList | null) {
+    if (!lista) return;
+    const aceitos: File[] = [];
+    const rejeitados: string[] = [];
+    for (const arquivo of Array.from(lista)) {
+      if (arquivo.size > TAMANHO_MAXIMO_ANEXO) {
+        rejeitados.push(arquivo.name);
+      } else {
+        aceitos.push(arquivo);
+      }
+    }
+    setArquivos((prev) => [...prev, ...aceitos]);
+    setAvisoArquivo(rejeitados.length > 0 ? `Maior que 5 MB, não enviado: ${rejeitados.join(", ")}` : null);
+  }
+
+  async function enviarEConfirmar(): Promise<ResultadoRequerimento> {
+    const caminhos: string[] = [];
+    if (arquivos.length > 0) {
+      const supabase = criarClienteNavegador();
+      for (const arquivo of arquivos) {
+        const caminho = `${requerimentoId}/${secretaria.secretariaId}/${Date.now()}-${arquivo.name}`;
+        const { error } = await supabase.storage.from("requerimentos-anexos").upload(caminho, arquivo);
+        if (error) {
+          return { sucesso: false, erro: `Falha ao enviar ${arquivo.name}: ${error.message}` };
+        }
+        caminhos.push(caminho);
+      }
+    }
+    return marcarRespondida(requerimentoId, secretaria.secretariaId, caminhos);
+  }
+
+  const rotuloBotao = ehBaixaPeloGabinete ? "Dar baixa (Gabinete)" : "Marcar respondida";
+
+  return (
+    <li className="rounded-md border border-slate-100 bg-white p-2 text-sm">
+      <div className="flex items-center justify-between gap-2">
+        <span>
+          {secretaria.nomeSecretaria}
+          {secretaria.respondidaEm ? (
+            <span className="ml-2 text-xs text-green-700">respondida em {secretaria.respondidaEm}</span>
+          ) : (
+            <span className="ml-2 text-xs text-slate-400">pendente</span>
+          )}
+        </span>
+        {!secretaria.respondidaEm && podeMarcar && !respondendo && (
+          <Button size="sm" variant="outline" onClick={() => setRespondendo(true)}>
+            {rotuloBotao}
+          </Button>
+        )}
+      </div>
+
+      {secretaria.anexos.length > 0 && (
+        <ul className="mt-1.5 flex flex-wrap gap-1.5">
+          {secretaria.anexos.map((a) => (
+            <li key={a.caminho}>
+              {a.url ? (
+                <a
+                  href={a.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-cataguases-azul hover:underline"
+                >
+                  <Paperclip className="h-3 w-3" aria-hidden />
+                  {a.nomeArquivo}
+                </a>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-400">
+                  <Paperclip className="h-3 w-3" aria-hidden />
+                  {a.nomeArquivo} (link expirado)
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {respondendo && (
+        <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 p-2">
+          <label className="text-xs text-slate-500">Anexar ofício/documento de resposta (opcional)</label>
+          <input
+            type="file"
+            multiple
+            accept="image/*,application/pdf,text/plain"
+            onChange={(e) => {
+              selecionarArquivos(e.target.files);
+              e.target.value = "";
+            }}
+            className="mt-1 block w-full text-xs text-slate-500"
+          />
+          {arquivos.length > 0 && (
+            <ul className="mt-1.5 flex flex-wrap gap-1.5">
+              {arquivos.map((arquivo, i) => (
+                <li
+                  key={`${arquivo.name}-${i}`}
+                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-600"
+                >
+                  {arquivo.name}
+                  <button
+                    type="button"
+                    aria-label={`Remover ${arquivo.name}`}
+                    onClick={() => setArquivos((prev) => prev.filter((_, j) => j !== i))}
+                  >
+                    <X className="h-3 w-3" aria-hidden />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {avisoArquivo && <p className="mt-1 text-[11px] text-amber-700">{avisoArquivo}</p>}
+          {acao.erro && <p className="mt-1.5 text-xs text-red-700">{acao.erro}</p>}
+          <div className="mt-2 flex gap-2">
+            <Button
+              size="sm"
+              disabled={acao.pendente}
+              onClick={() =>
+                acao.executar(enviarEConfirmar, () => {
+                  setRespondendo(false);
+                  setArquivos([]);
+                })
+              }
+            >
+              {acao.pendente ? "Enviando…" : rotuloBotao}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={acao.pendente}
+              onClick={() => {
+                setRespondendo(false);
+                setArquivos([]);
+                setAvisoArquivo(null);
+              }}
+            >
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      )}
+    </li>
   );
 }
 
