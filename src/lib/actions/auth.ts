@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { criarClienteServidor } from "@/lib/supabase/server";
+import { envPublico } from "@/lib/env";
 import {
   esquemaLogin,
   esquemaNovaSenha,
@@ -59,13 +60,21 @@ export async function entrar(
   }
 
   // DIAGNÓSTICO TEMPORÁRIO (remover depois de identificar a causa do login
-  // falhando): nunca loga a senha em si, só metadados que provam se o valor
-  // que chega no servidor bate com o que a pessoa digitou.
+  // falhando): a senha já foi confirmada limpa numa rodada anterior deste
+  // log — agora inspeciona as env vars públicas usadas pelo cliente
+  // Supabase, sem nunca logar a chave inteira.
+  const envDiag = envPublico();
+  const anon = envDiag.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const indiceRuim = Array.from(anon).findIndex((c) => (c.codePointAt(0) ?? 0) > 255);
   console.log(
-    "[entrar][diag] senha recebida:",
+    "[entrar][diag-env]",
     JSON.stringify({
-      tamanho: analise.data.senha.length,
-      codigos: Array.from(analise.data.senha).map((c) => c.codePointAt(0)),
+      url: envDiag.NEXT_PUBLIC_SUPABASE_URL,
+      anonLen: anon.length,
+      anonInicio: anon.slice(0, 12),
+      anonFim: anon.slice(-12),
+      anonIndiceCaractereRuim: indiceRuim,
+      anonCodigoCaractereRuim: indiceRuim >= 0 ? anon.codePointAt(indiceRuim) : null,
     })
   );
 
