@@ -58,6 +58,17 @@ export async function entrar(
     return { erro: analise.error.issues[0]?.message ?? "Dados inválidos" };
   }
 
+  // DIAGNÓSTICO TEMPORÁRIO (remover depois de identificar a causa do login
+  // falhando): nunca loga a senha em si, só metadados que provam se o valor
+  // que chega no servidor bate com o que a pessoa digitou.
+  console.log(
+    "[entrar][diag] senha recebida:",
+    JSON.stringify({
+      tamanho: analise.data.senha.length,
+      codigos: Array.from(analise.data.senha).map((c) => c.codePointAt(0)),
+    })
+  );
+
   const supabase = await criarClienteServidor();
 
   const { data, error } = await supabase.auth.signInWithPassword({
