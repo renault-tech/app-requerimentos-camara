@@ -24,7 +24,6 @@ function traduzirErro(mensagem: string | undefined): string {
 
 function revalidarTudo() {
   revalidatePath("/dashboard");
-  revalidatePath("/requerimentos");
 }
 
 const esquemaCriar = z.object({

@@ -48,12 +48,6 @@ export default async function LayoutProtegido({ children }: { children: React.Re
           >
             Início
           </Link>
-          <Link
-            href="/requerimentos"
-            className="rounded-md px-2.5 py-1.5 text-slate-200 transition-colors hover:bg-white/10 hover:text-white"
-          >
-            Requerimentos
-          </Link>
           {podeConfigurar && (
             <Link
               href="/configuracoes"
