@@ -65,7 +65,7 @@ function SecaoPrazo({ config }: { config: ConfigPrazo }) {
         <Campo rotulo="Amarelo a partir de" valor={limiarAmareloDias} onMudar={setLimiarAmareloDias} />
         <Campo rotulo="Laranja a partir de" valor={limiarLaranjaDias} onMudar={setLimiarLaranjaDias} />
       </div>
-      {acao.erro && <p className="mt-2 text-xs text-semaforo-vermelho">{acao.erro}</p>}
+      {acao.erro && <p className="mt-2 text-xs text-red-700">{acao.erro}</p>}
       <Button
         size="sm"
         className="mt-3"
@@ -142,7 +142,7 @@ function SecaoSecretarias({ secretarias }: { secretarias: Secretaria[] }) {
           Adicionar
         </Button>
       </div>
-      {acao.erro && <p className="mt-2 text-xs text-semaforo-vermelho">{acao.erro}</p>}
+      {acao.erro && <p className="mt-2 text-xs text-red-700">{acao.erro}</p>}
     </Cartao>
   );
 }
@@ -321,7 +321,7 @@ function FormularioAcesso({
           Ativo
         </label>
       </div>
-      {acao.erro && <p className="mt-2 text-xs text-semaforo-vermelho">{acao.erro}</p>}
+      {acao.erro && <p className="mt-2 text-xs text-red-700">{acao.erro}</p>}
       <div className="mt-3 flex gap-2">
         <Button
           size="sm"

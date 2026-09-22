@@ -16,23 +16,11 @@ import {
 } from "@/lib/actions/requerimentos";
 import type { RequerimentoDaLista } from "@/lib/dados/requerimentos";
 import type { Fase } from "@/lib/requerimentos/status";
+import { COR_FASE, ROTULO_FASE, COR_ATRASADO } from "@/lib/requerimentos/cores-fase";
+import { dataNoFuso } from "@/lib/fuso";
 import type { ConfigPrazo, Secretaria, Usuario } from "@/types/database";
 
 type FiltroCartao = "todos" | "atrasados" | Fase;
-
-const ROTULO_FASE: Record<Fase, string> = {
-  aguardando: "Aguardando distribuição",
-  distribuido: "Em andamento",
-  respondido: "Pronto p/ devolver",
-  devolvido: "Devolvido",
-};
-
-const COR_FASE: Record<Fase, string> = {
-  aguardando: "#378ADD",
-  distribuido: "#EF9F27",
-  respondido: "#639922",
-  devolvido: "#94A3B8",
-};
 
 export function PainelRequerimentos({
   requerimentosIniciais,
@@ -82,7 +70,7 @@ export function PainelRequerimentos({
 
   const cartoes: { chave: FiltroCartao; rotulo: string; cor: string; valor: number }[] = [
     { chave: "todos", rotulo: "Todos", cor: "#0C1D33", valor: contagens.todos },
-    { chave: "atrasados", rotulo: "Atrasados", cor: "#E24B4A", valor: contagens.atrasados },
+    { chave: "atrasados", rotulo: "Atrasados", cor: COR_ATRASADO, valor: contagens.atrasados },
     { chave: "aguardando", rotulo: ROTULO_FASE.aguardando, cor: COR_FASE.aguardando, valor: contagens.aguardando },
     { chave: "distribuido", rotulo: ROTULO_FASE.distribuido, cor: COR_FASE.distribuido, valor: contagens.distribuido },
     { chave: "respondido", rotulo: ROTULO_FASE.respondido, cor: COR_FASE.respondido, valor: contagens.respondido },
@@ -301,7 +289,7 @@ function DetalheRequerimento({
           )}
         </ul>
         {acaoResponder.erro && (
-          <p className="mt-2 text-xs text-semaforo-vermelho">{acaoResponder.erro}</p>
+          <p className="mt-2 text-xs text-red-700">{acaoResponder.erro}</p>
         )}
 
         {podeDistribuir && requerimento.fase !== "devolvido" && secretariasDisponiveis.length > 0 && (
@@ -340,7 +328,7 @@ function DetalheRequerimento({
               Distribuir
             </Button>
             {acaoDistribuir.erro && (
-              <p className="mt-2 text-xs text-semaforo-vermelho">{acaoDistribuir.erro}</p>
+              <p className="mt-2 text-xs text-red-700">{acaoDistribuir.erro}</p>
             )}
           </div>
         )}
@@ -438,7 +426,7 @@ function FormularioProrrogacao({
           />
         </div>
       </div>
-      {erro && <p className="mt-2 text-xs text-semaforo-vermelho">{erro}</p>}
+      {erro && <p className="mt-2 text-xs text-red-700">{erro}</p>}
       <div className="mt-2 flex gap-2">
         <Button size="sm" disabled={pendente} onClick={() => onConfirmar(dias, motivo)}>
           Confirmar
@@ -472,7 +460,7 @@ function FormularioDevolucao({
         placeholder="Ex.: Ofício GP 045/2026"
         className={`${ESTILO_CAMPO} mt-1 w-full`}
       />
-      {erro && <p className="mt-2 text-xs text-semaforo-vermelho">{erro}</p>}
+      {erro && <p className="mt-2 text-xs text-red-700">{erro}</p>}
       <div className="mt-2 flex gap-2">
         <Button size="sm" disabled={pendente} onClick={() => onConfirmar(protocolo)}>
           Confirmar devolução
@@ -498,14 +486,14 @@ function ModalNovoRequerimento({
   const [numero, setNumero] = React.useState("");
   const [vereador, setVereador] = React.useState("");
   const [assunto, setAssunto] = React.useState("");
-  const [recebidoEm, setRecebidoEm] = React.useState(() => new Date().toISOString().slice(0, 10));
+  const [recebidoEm, setRecebidoEm] = React.useState(() => dataNoFuso(new Date()));
   const [diasTotal, setDiasTotal] = React.useState(diasPadrao);
 
   function limpar() {
     setNumero("");
     setVereador("");
     setAssunto("");
-    setRecebidoEm(new Date().toISOString().slice(0, 10));
+    setRecebidoEm(dataNoFuso(new Date()));
     setDiasTotal(diasPadrao);
   }
 
@@ -563,7 +551,7 @@ function ModalNovoRequerimento({
               />
             </div>
           </div>
-          {acao.erro && <p className="text-xs text-semaforo-vermelho">{acao.erro}</p>}
+          {acao.erro && <p className="text-xs text-red-700">{acao.erro}</p>}
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" onClick={onFechar}>
               Cancelar

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { listarRequerimentos } from "@/lib/dados/requerimentos";
+import { COR_FASE, ROTULO_FASE, COR_ATRASADO } from "@/lib/requerimentos/cores-fase";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +17,11 @@ export default async function PaginaDashboard() {
 
   const cartoes = [
     { rotulo: "Total", valor: total, cor: "#0C1D33" },
-    { rotulo: "Atrasados", valor: atrasados, cor: "#E24B4A" },
-    { rotulo: "Aguardando distribuição", valor: aguardando, cor: "#378ADD" },
-    { rotulo: "Em andamento", valor: emAndamento, cor: "#EF9F27" },
-    { rotulo: "Prontos p/ devolver", valor: respondidos, cor: "#639922" },
-    { rotulo: "Devolvidos", valor: devolvidos, cor: "#94A3B8" },
+    { rotulo: "Atrasados", valor: atrasados, cor: COR_ATRASADO },
+    { rotulo: ROTULO_FASE.aguardando, valor: aguardando, cor: COR_FASE.aguardando },
+    { rotulo: ROTULO_FASE.distribuido, valor: emAndamento, cor: COR_FASE.distribuido },
+    { rotulo: ROTULO_FASE.respondido, valor: respondidos, cor: COR_FASE.respondido },
+    { rotulo: ROTULO_FASE.devolvido, valor: devolvidos, cor: COR_FASE.devolvido },
   ];
 
   return (
