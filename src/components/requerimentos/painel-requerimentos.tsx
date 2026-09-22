@@ -487,132 +487,180 @@ function DetalheRequerimento({
   const acaoProrrogar = useAcao();
   const acaoDevolver = useAcao();
 
-  const [selecionadas, setSelecionadas] = React.useState<string[]>([]);
+  const [mostrarDistribuicao, setMostrarDistribuicao] = React.useState(false);
   const [mostrarProrrogacao, setMostrarProrrogacao] = React.useState(false);
   const [mostrarDevolucao, setMostrarDevolucao] = React.useState(false);
 
   const idsJaDistribuidas = new Set(requerimento.secretarias.map((s) => s.secretariaId));
   const secretariasDisponiveis = secretarias.filter((s) => !idsJaDistribuidas.has(s.id));
-  const todasResponderam =
-    requerimento.secretarias.length > 0 && requerimento.secretarias.every((s) => s.respondidaEm);
+  const pendentes = requerimento.secretarias.filter((s) => !s.respondidaEm).length;
+  const todasResponderam = requerimento.secretarias.length > 0 && pendentes === 0;
+
+  const motivoEnvioBloqueado =
+    requerimento.secretarias.length === 0
+      ? "Distribua a pelo menos uma secretaria antes"
+      : !todasResponderam
+        ? `Aguardando resposta de ${pendentes} secretaria${pendentes > 1 ? "s" : ""}`
+        : undefined;
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <div>
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Secretarias
-        </h3>
-        <ul className="mt-2 space-y-2">
-          {requerimento.secretarias.map((s) => {
-            const souEu = usuario.perfil === "secretaria" && usuario.secretaria_id === s.secretariaId;
-            return (
-              <LinhaSecretaria
-                key={s.id}
-                requerimentoId={requerimento.id}
-                secretaria={s}
-                podeMarcar={souEu || podeDistribuir}
-                ehBaixaPeloGabinete={podeDistribuir && !souEu}
-              />
-            );
-          })}
-          {requerimento.secretarias.length === 0 && (
-            <li className="text-sm text-slate-400">Ainda não distribuído.</li>
-          )}
-        </ul>
-
-        {podeDistribuir && requerimento.fase !== "devolvido" && secretariasDisponiveis.length > 0 && (
-          <div className="mt-3 rounded-md border border-slate-200 bg-white p-3">
-            <p className="text-xs font-medium text-slate-600">Distribuir a mais secretarias</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {secretariasDisponiveis.map((s) => (
-                <label
-                  key={s.id}
-                  className="flex items-center gap-1.5 rounded-md border border-slate-200 px-2 py-1 text-xs"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selecionadas.includes(s.id)}
-                    onChange={(e) =>
-                      setSelecionadas((prev) =>
-                        e.target.checked ? [...prev, s.id] : prev.filter((id) => id !== s.id)
-                      )
-                    }
-                  />
-                  {s.nome}
-                </label>
-              ))}
-            </div>
-            <Button
-              size="sm"
-              className="mt-2"
-              disabled={selecionadas.length === 0 || acaoDistribuir.pendente}
-              onClick={() =>
-                acaoDistribuir.executar(
-                  () => distribuirRequerimento(requerimento.id, selecionadas),
-                  () => setSelecionadas([])
-                )
-              }
-            >
-              Distribuir
-            </Button>
-            {acaoDistribuir.erro && (
-              <p className="mt-2 text-xs text-red-700">{acaoDistribuir.erro}</p>
-            )}
-          </div>
-        )}
-      </div>
-
-      <div>
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Prazo</h3>
-        <p className="mt-2 text-sm text-slate-600">
-          Recebido em {requerimento.recebidoEm} · prazo total {requerimento.diasTotal} dias
-          {requerimento.distribuidoEm && <> · distribuído em {requerimento.distribuidoEm}</>}
-          {requerimento.devolvidoEm && (
-            <>
-              {" "}
-              · devolvido em {requerimento.devolvidoEm}
-              {requerimento.protocoloDevolucao && <> ({requerimento.protocoloDevolucao})</>}
-            </>
-          )}
-        </p>
-
-        {podeDistribuir && requerimento.fase !== "devolvido" && (
-          <div className="mt-3 space-y-2">
-            {!mostrarProrrogacao ? (
-              <Button size="sm" variant="outline" onClick={() => setMostrarProrrogacao(true)}>
-                Solicitar prorrogação
+    <div>
+      {/* Ações de nível do requerimento — as 3 aqui, compactas; a de
+          "marcar recebimento" fica junto de cada secretaria abaixo, porque
+          pode haver mais de uma resposta a consolidar. */}
+      {podeDistribuir && requerimento.fase !== "devolvido" && (
+        <div className="flex flex-wrap items-start gap-2 border-b border-slate-100 pb-3">
+          {secretariasDisponiveis.length > 0 &&
+            (!mostrarDistribuicao ? (
+              <Button size="sm" variant="outline" onClick={() => setMostrarDistribuicao(true)}>
+                Distribuir
               </Button>
             ) : (
-              <FormularioProrrogacao
-                pendente={acaoProrrogar.pendente}
-                erro={acaoProrrogar.erro}
-                onCancelar={() => setMostrarProrrogacao(false)}
-                onConfirmar={(dias, motivo) =>
-                  acaoProrrogar.executar(
-                    () => solicitarProrrogacao(requerimento.id, dias, motivo),
-                    () => setMostrarProrrogacao(false)
+              <FormularioDistribuicao
+                secretariasDisponiveis={secretariasDisponiveis}
+                pendente={acaoDistribuir.pendente}
+                erro={acaoDistribuir.erro}
+                onCancelar={() => setMostrarDistribuicao(false)}
+                onConfirmar={(ids) =>
+                  acaoDistribuir.executar(
+                    () => distribuirRequerimento(requerimento.id, ids),
+                    () => setMostrarDistribuicao(false)
                   )
                 }
               />
-            )}
+            ))}
 
-            {todasResponderam &&
-              (!mostrarDevolucao ? (
-                <Button size="sm" onClick={() => setMostrarDevolucao(true)}>
-                  Devolver à Câmara
-                </Button>
-              ) : (
-                <FormularioDevolucao
-                  pendente={acaoDevolver.pendente}
-                  erro={acaoDevolver.erro}
-                  onCancelar={() => setMostrarDevolucao(false)}
-                  onConfirmar={(protocolo) =>
-                    acaoDevolver.executar(() => devolverACamara(requerimento.id, protocolo))
-                  }
+          {!mostrarProrrogacao ? (
+            <Button size="sm" variant="outline" onClick={() => setMostrarProrrogacao(true)}>
+              Solicitar prorrogação
+            </Button>
+          ) : (
+            <FormularioProrrogacao
+              pendente={acaoProrrogar.pendente}
+              erro={acaoProrrogar.erro}
+              onCancelar={() => setMostrarProrrogacao(false)}
+              onConfirmar={(dias, motivo) =>
+                acaoProrrogar.executar(
+                  () => solicitarProrrogacao(requerimento.id, dias, motivo),
+                  () => setMostrarProrrogacao(false)
+                )
+              }
+            />
+          )}
+
+          {!mostrarDevolucao ? (
+            <Button
+              size="sm"
+              disabled={!!motivoEnvioBloqueado}
+              title={motivoEnvioBloqueado}
+              onClick={() => setMostrarDevolucao(true)}
+            >
+              Enviar à Câmara
+            </Button>
+          ) : (
+            <FormularioDevolucao
+              pendente={acaoDevolver.pendente}
+              erro={acaoDevolver.erro}
+              onCancelar={() => setMostrarDevolucao(false)}
+              onConfirmar={(protocolo) =>
+                acaoDevolver.executar(() => devolverACamara(requerimento.id, protocolo))
+              }
+            />
+          )}
+        </div>
+      )}
+
+      <div className="mt-3 grid gap-4 sm:grid-cols-2">
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Secretarias
+          </h3>
+          <ul className="mt-2 space-y-1.5">
+            {requerimento.secretarias.map((s) => {
+              const souEu = usuario.perfil === "secretaria" && usuario.secretaria_id === s.secretariaId;
+              return (
+                <LinhaSecretaria
+                  key={s.id}
+                  requerimentoId={requerimento.id}
+                  secretaria={s}
+                  podeMarcar={souEu || podeDistribuir}
+                  ehBaixaPeloGabinete={podeDistribuir && !souEu}
                 />
-              ))}
-          </div>
-        )}
+              );
+            })}
+            {requerimento.secretarias.length === 0 && (
+              <li className="text-sm text-slate-400">Ainda não distribuído.</li>
+            )}
+          </ul>
+        </div>
+
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Prazo</h3>
+          <p className="mt-2 text-sm text-slate-600">
+            Recebido em {requerimento.recebidoEm} · prazo total {requerimento.diasTotal} dias
+            {requerimento.distribuidoEm && <> · distribuído em {requerimento.distribuidoEm}</>}
+            {requerimento.devolvidoEm && (
+              <>
+                {" "}
+                · devolvido em {requerimento.devolvidoEm}
+                {requerimento.protocoloDevolucao && <> ({requerimento.protocoloDevolucao})</>}
+              </>
+            )}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FormularioDistribuicao({
+  secretariasDisponiveis,
+  pendente,
+  erro,
+  onCancelar,
+  onConfirmar,
+}: {
+  secretariasDisponiveis: Secretaria[];
+  pendente: boolean;
+  erro: string | null;
+  onCancelar: () => void;
+  onConfirmar: (ids: string[]) => void;
+}) {
+  const [selecionadas, setSelecionadas] = React.useState<string[]>([]);
+  return (
+    <div className="w-full rounded-md border border-slate-200 bg-white p-2.5">
+      <p className="text-xs font-medium text-slate-600">Distribuir a secretarias</p>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {secretariasDisponiveis.map((s) => (
+          <label
+            key={s.id}
+            className="flex items-center gap-1.5 rounded-md border border-slate-200 px-2 py-1 text-xs"
+          >
+            <input
+              type="checkbox"
+              checked={selecionadas.includes(s.id)}
+              onChange={(e) =>
+                setSelecionadas((prev) =>
+                  e.target.checked ? [...prev, s.id] : prev.filter((id) => id !== s.id)
+                )
+              }
+            />
+            {s.nome}
+          </label>
+        ))}
+      </div>
+      {erro && <p className="mt-2 text-xs text-red-700">{erro}</p>}
+      <div className="mt-2 flex gap-2">
+        <Button
+          size="sm"
+          disabled={selecionadas.length === 0 || pendente}
+          onClick={() => onConfirmar(selecionadas)}
+        >
+          Confirmar distribuição
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onCancelar}>
+          Cancelar
+        </Button>
       </div>
     </div>
   );
@@ -679,7 +727,7 @@ function LinhaSecretaria({
   const rotuloBotao = ehBaixaPeloGabinete ? "Dar baixa (Gabinete)" : "Marcar respondida";
 
   return (
-    <li className="rounded-md border border-slate-100 bg-white p-2 text-sm">
+    <li className="rounded-md border border-slate-100 bg-white p-1.5 text-sm">
       <div className="flex items-center justify-between gap-2">
         <span>
           {secretaria.nomeSecretaria}
@@ -801,7 +849,7 @@ function FormularioProrrogacao({
   const [dias, setDias] = React.useState(5);
   const [motivo, setMotivo] = React.useState("");
   return (
-    <div className="rounded-md border border-slate-200 bg-white p-3">
+    <div className="w-full rounded-md border border-slate-200 bg-white p-2.5">
       <div className="flex items-end gap-2">
         <div>
           <label className="text-xs text-slate-500">Dias concedidos</label>
@@ -849,7 +897,7 @@ function FormularioDevolucao({
 }) {
   const [protocolo, setProtocolo] = React.useState("");
   return (
-    <div className="rounded-md border border-slate-200 bg-white p-3">
+    <div className="w-full rounded-md border border-slate-200 bg-white p-2.5">
       <label className="text-xs text-slate-500">Protocolo do ofício de devolução</label>
       <input
         value={protocolo}
