@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { obterUsuarioAtual } from "@/lib/auth/perfil";
-import { obterConfigPrazo, listarSecretarias } from "@/lib/dados/requerimentos";
+import { obterConfigPrazo, listarSecretarias, listarVereadores } from "@/lib/dados/requerimentos";
 import { listarUsuariosComAcesso } from "@/lib/dados/configuracoes";
 import { PainelConfiguracoes } from "@/components/configuracoes/painel-configuracoes";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
@@ -15,9 +15,10 @@ export default async function PaginaConfiguracoes() {
     redirect("/dashboard");
   }
 
-  const [config, secretarias, usuarios] = await Promise.all([
+  const [config, secretarias, vereadores, usuarios] = await Promise.all([
     obterConfigPrazo(),
     listarSecretarias(),
+    listarVereadores(),
     listarUsuariosComAcesso(),
   ]);
 
@@ -25,12 +26,13 @@ export default async function PaginaConfiguracoes() {
     <div className="px-4 sm:px-6">
       <CabecalhoPagina
         titulo="Configurações"
-        subtitulo="Prazo padrão, secretarias e quem tem acesso ao módulo."
+        subtitulo="Prazo padrão, secretarias, vereadores e quem tem acesso ao módulo."
       />
 
       <PainelConfiguracoes
         config={config}
         secretarias={secretarias}
+        vereadores={vereadores}
         usuarios={usuarios}
         souAdmin={usuario.perfil === "admin"}
       />

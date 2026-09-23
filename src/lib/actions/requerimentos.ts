@@ -210,3 +210,35 @@ export async function devolverACamara(
   revalidarTudo();
   return { sucesso: true };
 }
+
+/**
+ * Anula o lançamento (erro de cadastro, duplicado, ou requerimento
+ * retirado pelo vereador) — permanente, sem action de "desanular". A RPC
+ * trava as demais transições do ciclo (distribuir, responder, etc.) para
+ * este requerimento.
+ */
+export async function anularRequerimento(
+  requerimentoId: string,
+  motivo: string
+): Promise<ResultadoRequerimento> {
+  if (!z.uuid().safeParse(requerimentoId).success) {
+    return { sucesso: false, erro: "Identificador inválido" };
+  }
+  if (motivo.trim().length < 3) {
+    return { sucesso: false, erro: "Descreva o motivo da anulação" };
+  }
+
+  const supabase = await criarClienteServidor();
+  const { error } = await supabase.rpc("anular_requerimento", {
+    p_requerimento: requerimentoId,
+    p_motivo: motivo,
+  });
+
+  if (error) {
+    console.error("[anularRequerimento] erro na RPC:", error);
+    return { sucesso: false, erro: traduzirErro(error.message) };
+  }
+
+  revalidarTudo();
+  return { sucesso: true };
+}

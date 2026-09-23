@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   AlertTriangle,
   ArrowRightCircle,
+  Ban,
   CheckCheck,
   FileStack,
   Hourglass,
@@ -29,6 +30,7 @@ import {
   anexarDocumento,
   solicitarProrrogacao,
   devolverACamara,
+  anularRequerimento,
   type ResultadoRequerimento,
 } from "@/lib/actions/requerimentos";
 import type { AnexoDocumento, RequerimentoDaLista, SecretariaDoRequerimento } from "@/lib/dados/requerimentos";
@@ -42,7 +44,7 @@ import {
 } from "@/lib/requerimentos/cores-fase";
 import { dataNoFuso } from "@/lib/fuso";
 import type { ColunaExportavel, GrupoTotalizacao } from "@/lib/exportar-xlsx";
-import type { ConfigPrazo, Secretaria, Usuario } from "@/types/database";
+import type { ConfigPrazo, Secretaria, Usuario, Vereador } from "@/types/database";
 
 type FiltroCartao = "todos" | "atrasados" | Fase;
 
@@ -64,6 +66,11 @@ const EXPORT_COLS: ColunaExportavel<RequerimentoDaLista>[] = [
   { key: "documento", rotulo: "Documento anexado", valor: (r) => (r.anexos.length > 0 ? "Sim" : "Não") },
   { key: "fase", rotulo: "Status", valor: (r) => ROTULO_FASE[r.fase] },
   { key: "atrasado", rotulo: "Atrasado", valor: (r) => (r.atrasado ? "Sim" : "Não") },
+  {
+    key: "anulado",
+    rotulo: "Anulado",
+    valor: (r) => (r.anuladoEm ? `Sim (${r.anuladoEm}) — ${r.anuladoMotivo ?? ""}` : "Não"),
+  },
 ];
 
 const GRUPOS_TOTALIZACAO: GrupoTotalizacao<RequerimentoDaLista>[] = [
@@ -78,12 +85,14 @@ const GRUPOS_TOTALIZACAO: GrupoTotalizacao<RequerimentoDaLista>[] = [
 export function PainelRequerimentos({
   requerimentosIniciais,
   secretarias,
+  vereadores,
   config,
   usuario,
   podeDistribuir,
 }: {
   requerimentosIniciais: RequerimentoDaLista[];
   secretarias: Secretaria[];
+  vereadores: Vereador[];
   config: ConfigPrazo;
   usuario: Usuario;
   podeDistribuir: boolean;
@@ -109,6 +118,7 @@ export function PainelRequerimentos({
       distribuido: requerimentos.filter((r) => r.fase === "distribuido").length,
       respondido: requerimentos.filter((r) => r.fase === "respondido").length,
       devolvido: requerimentos.filter((r) => r.fase === "devolvido").length,
+      anulado: requerimentos.filter((r) => r.fase === "anulado").length,
     };
   }, [requerimentos]);
 
@@ -213,11 +223,19 @@ export function PainelRequerimentos({
       valor: contagens.devolvido,
       Icone: CheckCheck,
     },
+    {
+      chave: "anulado",
+      rotulo: ROTULO_FASE.anulado,
+      cor: COR_FASE_VIVA.anulado,
+      corNumero: COR_FASE.anulado,
+      valor: contagens.anulado,
+      Icone: Ban,
+    },
   ];
 
   return (
     <div className="mt-5">
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-7">
         {cartoes.map((c) => {
           const ativo = filtro === c.chave;
           return (
@@ -371,6 +389,7 @@ export function PainelRequerimentos({
           <tbody>
             {visiveis.map((r) => {
               const expandida = linhaExpandida === r.id;
+              const anulado = r.fase === "anulado";
               return (
                 <React.Fragment key={r.id}>
                   <tr
@@ -384,9 +403,12 @@ export function PainelRequerimentos({
                         setLinhaExpandida(expandida ? null : r.id);
                       }
                     }}
+                    style={anulado ? { backgroundColor: "#F4F4F5" } : undefined}
                     className="cursor-pointer border-b border-slate-100 align-top last:border-0 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cataguases-azul"
                   >
-                    <td className="px-3 py-2.5 font-mono text-xs">{r.numero}</td>
+                    <td className={cn("px-3 py-2.5 font-mono text-xs", anulado && "text-slate-400 line-through")}>
+                      {r.numero}
+                    </td>
                     <td className="px-3 py-2.5">{r.vereador}</td>
                     <td className="max-w-[260px] break-words px-3 py-2.5">{r.assunto}</td>
                     <td className="px-3 py-2.5">
@@ -456,6 +478,7 @@ export function PainelRequerimentos({
           aberto={modalNovoAberto}
           onFechar={() => setModalNovoAberto(false)}
           diasPadrao={config.prazo_padrao_dias}
+          vereadores={vereadores}
         />
       )}
 
@@ -489,13 +512,17 @@ function DetalheRequerimento({
   const acaoDistribuir = useAcao();
   const acaoProrrogar = useAcao();
   const acaoDevolver = useAcao();
+  const acaoAnular = useAcao();
 
   const [mostrarDistribuicao, setMostrarDistribuicao] = React.useState(false);
   const [mostrarProrrogacao, setMostrarProrrogacao] = React.useState(false);
   const [mostrarDevolucao, setMostrarDevolucao] = React.useState(false);
+  const [mostrarAnulacao, setMostrarAnulacao] = React.useState(false);
+
+  const anulado = requerimento.fase === "anulado";
 
   const idsJaDistribuidas = new Set(requerimento.secretarias.map((s) => s.secretariaId));
-  const secretariasDisponiveis = secretarias.filter((s) => !idsJaDistribuidas.has(s.id));
+  const secretariasDisponiveis = secretarias.filter((s) => s.ativo && !idsJaDistribuidas.has(s.id));
   const pendentes = requerimento.secretarias.filter((s) => !s.respondidaEm).length;
   const todasResponderam = requerimento.secretarias.length > 0 && pendentes === 0;
 
@@ -508,10 +535,17 @@ function DetalheRequerimento({
 
   return (
     <div>
+      {anulado && (
+        <div className="mb-3 rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-700">
+          <span className="font-medium">Requerimento anulado</span> em {requerimento.anuladoEm}
+          {requerimento.anuladoMotivo && <> — {requerimento.anuladoMotivo}</>}
+        </div>
+      )}
+
       {/* Ações de nível do requerimento — as 3 aqui, compactas; a de
           "marcar recebimento" fica junto de cada secretaria abaixo, porque
           pode haver mais de uma resposta a consolidar. */}
-      {podeDistribuir && requerimento.fase !== "devolvido" && (
+      {podeDistribuir && requerimento.fase !== "devolvido" && requerimento.fase !== "anulado" && (
         <div className="flex flex-wrap items-start gap-2 border-b border-slate-100 pb-3">
           {/* Distribuição é um ato único: uma vez `distribuidoEm` preenchido, o
               requerimento não pode ser distribuído de novo (nem para
@@ -572,6 +606,33 @@ function DetalheRequerimento({
               onCancelar={() => setMostrarDevolucao(false)}
               onConfirmar={(protocolo) =>
                 acaoDevolver.executar(() => devolverACamara(requerimento.id, protocolo))
+              }
+            />
+          )}
+        </div>
+      )}
+
+      {/* Anular: separado das ações normais do ciclo, de propósito — é um
+          ato de correção de cadastro (lançamento errado/duplicado), não um
+          passo do fluxo. Disponível em qualquer fase (inclusive devolvido —
+          um erro pode ser percebido depois), menos se já anulado. */}
+      {podeDistribuir && !anulado && (
+        <div className="mt-2 border-t border-slate-100 pt-2">
+          {!mostrarAnulacao ? (
+            <button
+              type="button"
+              className="text-xs text-red-700 hover:underline"
+              onClick={() => setMostrarAnulacao(true)}
+            >
+              Anular requerimento (lançamento incorreto/duplicado)
+            </button>
+          ) : (
+            <FormularioAnulacao
+              pendente={acaoAnular.pendente}
+              erro={acaoAnular.erro}
+              onCancelar={() => setMostrarAnulacao(false)}
+              onConfirmar={(motivo) =>
+                acaoAnular.executar(() => anularRequerimento(requerimento.id, motivo))
               }
             />
           )}
@@ -1099,14 +1160,138 @@ function FormularioDevolucao({
   );
 }
 
+function FormularioAnulacao({
+  pendente,
+  erro,
+  onCancelar,
+  onConfirmar,
+}: {
+  pendente: boolean;
+  erro: string | null;
+  onCancelar: () => void;
+  onConfirmar: (motivo: string) => void;
+}) {
+  const [motivo, setMotivo] = React.useState("");
+  return (
+    <div className="w-full rounded-md border border-red-200 bg-red-50 p-2.5">
+      <p className="text-xs font-medium text-red-800">
+        Anular é permanente — não existe &ldquo;desanular&rdquo;. Use para lançamento errado ou duplicado.
+      </p>
+      <label className="mt-2 block text-xs text-slate-600">Motivo</label>
+      <input
+        value={motivo}
+        onChange={(e) => setMotivo(e.target.value)}
+        placeholder="Ex.: Lançado em duplicidade, ver nº 046/2026"
+        className={`${ESTILO_CAMPO} mt-1 w-full`}
+      />
+      {erro && <p className="mt-2 text-xs text-red-700">{erro}</p>}
+      <div className="mt-2 flex gap-2">
+        <Button
+          size="sm"
+          variant="destructive"
+          disabled={pendente || motivo.trim().length < 3}
+          onClick={() => {
+            if (window.confirm("Anular este requerimento? Esta ação é permanente.")) {
+              onConfirmar(motivo);
+            }
+          }}
+        >
+          {pendente ? "Anulando…" : "Confirmar anulação"}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onCancelar}>
+          Cancelar
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+const OPCAO_OUTRO_VEREADOR = "__outro__";
+
+/**
+ * Lista suspensa alimentada pelo catálogo de vereadores (Configurações),
+ * com fallback "Outro" para texto livre — cobre o caso comum (escolher da
+ * lista) e o excepcional (nome ainda não cadastrado, suplente, correção
+ * pontual). `valor` continua sendo o NOME (texto), não um id — o campo
+ * `requerimentos.vereador` é texto livre no banco, sem FK, de propósito
+ * (ver comentário na migration).
+ */
+function CampoVereador({
+  vereadores,
+  valor,
+  onMudar,
+}: {
+  vereadores: Vereador[];
+  valor: string;
+  onMudar: (v: string) => void;
+}) {
+  const ativos = vereadores.filter((v) => v.ativo);
+  const [modoLivre, setModoLivre] = React.useState(
+    ativos.length === 0 || (valor !== "" && !ativos.some((v) => v.nome === valor))
+  );
+
+  if (modoLivre) {
+    return (
+      <div>
+        <div className="flex items-center justify-between">
+          <label className="text-xs text-slate-500">Vereador</label>
+          {ativos.length > 0 && (
+            <button
+              type="button"
+              className="text-xs text-cataguases-azul hover:underline"
+              onClick={() => setModoLivre(false)}
+            >
+              Escolher da lista
+            </button>
+          )}
+        </div>
+        <input
+          value={valor}
+          onChange={(e) => onMudar(e.target.value)}
+          placeholder="Nome do vereador"
+          className={`${ESTILO_CAMPO} mt-1 w-full`}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <label className="text-xs text-slate-500">Vereador</label>
+      <select
+        value={valor}
+        onChange={(e) => {
+          if (e.target.value === OPCAO_OUTRO_VEREADOR) {
+            setModoLivre(true);
+            onMudar("");
+          } else {
+            onMudar(e.target.value);
+          }
+        }}
+        className={`${ESTILO_CAMPO} mt-1 w-full`}
+      >
+        <option value="">Selecione…</option>
+        {ativos.map((v) => (
+          <option key={v.id} value={v.nome}>
+            {v.nome}
+          </option>
+        ))}
+        <option value={OPCAO_OUTRO_VEREADOR}>Outro (digitar nome)…</option>
+      </select>
+    </div>
+  );
+}
+
 function ModalNovoRequerimento({
   aberto,
   onFechar,
   diasPadrao,
+  vereadores,
 }: {
   aberto: boolean;
   onFechar: () => void;
   diasPadrao: number;
+  vereadores: Vereador[];
 }) {
   const acao = useAcao();
   const [numero, setNumero] = React.useState("");
@@ -1184,14 +1369,7 @@ function ModalNovoRequerimento({
               className={`${ESTILO_CAMPO} mt-1 w-full`}
             />
           </div>
-          <div>
-            <label className="text-xs text-slate-500">Vereador</label>
-            <input
-              value={vereador}
-              onChange={(e) => setVereador(e.target.value)}
-              className={`${ESTILO_CAMPO} mt-1 w-full`}
-            />
-          </div>
+          <CampoVereador vereadores={vereadores} valor={vereador} onMudar={setVereador} />
           <div>
             <label className="text-xs text-slate-500">Assunto</label>
             <textarea

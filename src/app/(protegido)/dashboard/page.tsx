@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { listarRequerimentos, listarSecretarias, obterConfigPrazo } from "@/lib/dados/requerimentos";
+import { listarRequerimentos, listarSecretarias, listarVereadores, obterConfigPrazo } from "@/lib/dados/requerimentos";
 import { obterUsuarioAtual, usuarioAtuaComoGabinete } from "@/lib/auth/perfil";
 import { PainelRequerimentos } from "@/components/requerimentos/painel-requerimentos";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
@@ -11,9 +11,10 @@ export default async function PaginaDashboard() {
   const usuario = await obterUsuarioAtual();
   if (!usuario) redirect("/login");
 
-  const [requerimentos, secretarias, config, gabinete] = await Promise.all([
+  const [requerimentos, secretarias, vereadores, config, gabinete] = await Promise.all([
     listarRequerimentos(),
     listarSecretarias(),
+    listarVereadores(),
     obterConfigPrazo(),
     usuarioAtuaComoGabinete(usuario),
   ]);
@@ -29,6 +30,7 @@ export default async function PaginaDashboard() {
       <PainelRequerimentos
         requerimentosIniciais={requerimentos}
         secretarias={secretarias}
+        vereadores={vereadores}
         config={config}
         usuario={usuario}
         podeDistribuir={gabinete}

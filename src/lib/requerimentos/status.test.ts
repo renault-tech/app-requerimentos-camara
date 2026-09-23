@@ -13,33 +13,49 @@ const CONFIG: ConfigPrazo = {
 
 describe("faseDoRequerimento", () => {
   it("aguardando: ainda não distribuído", () => {
-    expect(faseDoRequerimento({ distribuido_em: null, devolvido_em: null }, [])).toBe(
-      "aguardando"
-    );
+    expect(
+      faseDoRequerimento({ distribuido_em: null, devolvido_em: null, anulado_em: null }, [])
+    ).toBe("aguardando");
   });
 
   it("distribuido: alguma secretaria ainda não respondeu", () => {
-    const fase = faseDoRequerimento({ distribuido_em: "2026-01-01", devolvido_em: null }, [
-      { respondida_em: "2026-01-05" },
-      { respondida_em: null },
-    ]);
+    const fase = faseDoRequerimento(
+      { distribuido_em: "2026-01-01", devolvido_em: null, anulado_em: null },
+      [{ respondida_em: "2026-01-05" }, { respondida_em: null }]
+    );
     expect(fase).toBe("distribuido");
   });
 
   it("respondido: todas as secretarias responderam", () => {
-    const fase = faseDoRequerimento({ distribuido_em: "2026-01-01", devolvido_em: null }, [
-      { respondida_em: "2026-01-05" },
-      { respondida_em: "2026-01-06" },
-    ]);
+    const fase = faseDoRequerimento(
+      { distribuido_em: "2026-01-01", devolvido_em: null, anulado_em: null },
+      [{ respondida_em: "2026-01-05" }, { respondida_em: "2026-01-06" }]
+    );
     expect(fase).toBe("respondido");
   });
 
   it("devolvido vence qualquer outra condição", () => {
     const fase = faseDoRequerimento(
-      { distribuido_em: "2026-01-01", devolvido_em: "2026-01-10" },
+      { distribuido_em: "2026-01-01", devolvido_em: "2026-01-10", anulado_em: null },
       [{ respondida_em: null }]
     );
     expect(fase).toBe("devolvido");
+  });
+
+  it("anulado vence qualquer outra condição, inclusive devolvido", () => {
+    const fase = faseDoRequerimento(
+      { distribuido_em: "2026-01-01", devolvido_em: "2026-01-10", anulado_em: "2026-01-15" },
+      [{ respondida_em: "2026-01-05" }]
+    );
+    expect(fase).toBe("anulado");
+  });
+
+  it("anulado antes mesmo de distribuir", () => {
+    const fase = faseDoRequerimento(
+      { distribuido_em: null, devolvido_em: null, anulado_em: "2026-01-02" },
+      []
+    );
+    expect(fase).toBe("anulado");
   });
 });
 
@@ -104,6 +120,10 @@ describe("estaAtrasado", () => {
 
   it("devolvido nunca é atrasado, mesmo com dias negativos", () => {
     expect(estaAtrasado("devolvido", -10)).toBe(false);
+  });
+
+  it("anulado nunca é atrasado, mesmo com dias negativos", () => {
+    expect(estaAtrasado("anulado", -10)).toBe(false);
   });
 
   it("dentro do prazo não é atrasado", () => {

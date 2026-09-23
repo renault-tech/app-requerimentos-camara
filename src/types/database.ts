@@ -20,6 +20,19 @@ export type Usuario = {
 export type Secretaria = {
   id: string;
   nome: string;
+  /** Secretaria extinta/fundida some das listas de distribuição e de
+   * atribuição de acesso, mas nunca é apagada — registros antigos
+   * continuam mostrando o nome normalmente. */
+  ativo: boolean;
+};
+
+/** Catálogo de vereadores — mesmo molde de `Secretaria`. Usado só para
+ * alimentar a lista suspensa do campo `vereador` (texto livre, sem FK —
+ * ver comentário em `Requerimento.vereador`). */
+export type Vereador = {
+  id: string;
+  nome: string;
+  ativo: boolean;
 };
 
 /**
@@ -60,6 +73,11 @@ export type Requerimento = {
    * (anexo da RESPOSTA de cada secretaria). Só gabinete grava
    * (`anexar_documento`, sempre um append), na criação ou depois. */
   anexos: string[];
+  /** Lançamento anulado (erro de cadastro, duplicado, retirado pelo
+   * vereador) — permanente, sem RPC de "desanular". Trava as demais RPCs
+   * do ciclo (`requerimento_esta_anulado`, no banco). */
+  anulado_em: string | null;
+  anulado_motivo: string | null;
 };
 
 /** Junção multi-secretaria: um requerimento pode ir a mais de uma secretaria. */
@@ -98,7 +116,8 @@ export type TipoEvento =
   | "documento_anexado"
   | "prorrogacao_solicitada"
   | "prorrogacao_decidida"
-  | "devolvido";
+  | "devolvido"
+  | "anulado";
 
 export type EventoTimeline = {
   id: string;
@@ -134,6 +153,7 @@ export type Database = {
     Tables: {
       usuarios: Tabela<Usuario, "id" | "nome" | "email" | "perfil", never>;
       secretarias: Tabela<Secretaria, "nome", "id">;
+      vereadores: Tabela<Vereador, "nome", "id">;
       permissoes: Tabela<Permissao, "usuario_id" | "chave", "id">;
       config_prazo: Tabela<
         ConfigPrazo,
@@ -192,6 +212,10 @@ export type Database = {
       };
       devolver_a_camara: {
         Args: { p_requerimento: string; p_protocolo: string };
+        Returns: undefined;
+      };
+      anular_requerimento: {
+        Args: { p_requerimento: string; p_motivo: string };
         Returns: undefined;
       };
       definir_acesso: {

@@ -1,7 +1,7 @@
 import { criarClienteServidor } from "@/lib/supabase/server";
 import { calcularDiasRestantes, categoriaPrazo, estaAtrasado, faseDoRequerimento } from "@/lib/requerimentos/status";
 import type { CategoriaPrazo, Fase } from "@/lib/requerimentos/status";
-import type { ConfigPrazo, Secretaria } from "@/types/database";
+import type { ConfigPrazo, Secretaria, Vereador } from "@/types/database";
 
 export type AnexoResposta = {
   /** Caminho no bucket — usado como key estável em listas React. */
@@ -40,6 +40,8 @@ export type RequerimentoDaLista = {
   secretarias: SecretariaDoRequerimento[];
   /** Documento do próprio requerimento (ex.: PDF a enviar às secretarias). */
   anexos: AnexoDocumento[];
+  anuladoEm: string | null;
+  anuladoMotivo: string | null;
   fase: Fase;
   diasRestantes: number;
   prazo: CategoriaPrazo;
@@ -118,7 +120,7 @@ export async function listarRequerimentos(): Promise<RequerimentoDaLista[]> {
         })),
       }));
     const fase = faseDoRequerimento(
-      { distribuido_em: r.distribuido_em, devolvido_em: r.devolvido_em },
+      { distribuido_em: r.distribuido_em, devolvido_em: r.devolvido_em, anulado_em: r.anulado_em },
       secretariasDoRequerimento.map((s) => ({ respondida_em: s.respondidaEm }))
     );
     const diasRestantes = calcularDiasRestantes(r.recebido_em, r.dias_total, hoje);
@@ -138,6 +140,8 @@ export async function listarRequerimentos(): Promise<RequerimentoDaLista[]> {
         url: urlPorCaminho.get(caminho) ?? null,
         nomeArquivo: caminho.split("/").pop() ?? caminho,
       })),
+      anuladoEm: r.anulado_em,
+      anuladoMotivo: r.anulado_motivo,
       fase,
       diasRestantes,
       prazo: categoriaPrazo(diasRestantes, config),
@@ -152,6 +156,16 @@ export async function listarSecretarias(): Promise<Secretaria[]> {
   if (error) {
     console.error("[listarSecretarias] falha:", error);
     throw new Error("Não foi possível carregar as secretarias.");
+  }
+  return data ?? [];
+}
+
+export async function listarVereadores(): Promise<Vereador[]> {
+  const supabase = await criarClienteServidor();
+  const { data, error } = await supabase.from("vereadores").select("*").order("nome");
+  if (error) {
+    console.error("[listarVereadores] falha:", error);
+    throw new Error("Não foi possível carregar os vereadores.");
   }
   return data ?? [];
 }

@@ -1,16 +1,20 @@
 import { dataNoFuso, diasDeCalendarioEntre } from "@/lib/fuso";
 import type { ConfigPrazo, Requerimento, RequerimentoSecretaria } from "@/types/database";
 
-export type Fase = "aguardando" | "distribuido" | "respondido" | "devolvido";
+export type Fase = "aguardando" | "distribuido" | "respondido" | "devolvido" | "anulado";
 
 /**
  * Fase é sempre DERIVADA, nunca armazenada — mesma regra da casa usada
- * no App-Compras (nunca duplicar classificação de dados).
+ * no App-Compras (nunca duplicar classificação de dados). `anulado` tem
+ * precedência sobre qualquer outra condição: um requerimento anulado pode
+ * ter sido anulado em qualquer estágio (antes ou depois de distribuído/
+ * respondido/devolvido) — a anulação sempre vence.
  */
 export function faseDoRequerimento(
-  requerimento: Pick<Requerimento, "distribuido_em" | "devolvido_em">,
+  requerimento: Pick<Requerimento, "distribuido_em" | "devolvido_em" | "anulado_em">,
   secretarias: Pick<RequerimentoSecretaria, "respondida_em">[]
 ): Fase {
+  if (requerimento.anulado_em) return "anulado";
   if (requerimento.devolvido_em) return "devolvido";
   if (!requerimento.distribuido_em) return "aguardando";
   if (secretarias.length > 0 && secretarias.every((s) => s.respondida_em)) return "respondido";
@@ -81,7 +85,7 @@ export function categoriaPrazo(diasRestantes: number, config: ConfigPrazo): Cate
 }
 
 /** "Atrasado" é ortogonal à fase: um requerimento distribuído pode estar
- * atrasado; um já devolvido nunca está (o relógio parou pra ele). */
+ * atrasado; um já devolvido ou anulado nunca está (o relógio parou pra ele). */
 export function estaAtrasado(fase: Fase, diasRestantes: number): boolean {
-  return fase !== "devolvido" && diasRestantes <= 0;
+  return fase !== "devolvido" && fase !== "anulado" && diasRestantes <= 0;
 }

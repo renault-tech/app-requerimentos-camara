@@ -53,10 +53,10 @@ export async function atualizarConfigPrazo(
   return { sucesso: true };
 }
 
-const esquemaSecretaria = z.object({ nome: z.string().trim().min(2).max(120) });
+const esquemaCatalogo = z.object({ nome: z.string().trim().min(2).max(120) });
 
 export async function criarSecretaria(dados: { nome: string }): Promise<ResultadoConfig> {
-  const analise = esquemaSecretaria.safeParse(dados);
+  const analise = esquemaCatalogo.safeParse(dados);
   if (!analise.success) {
     return { sucesso: false, erro: analise.error.issues[0]?.message ?? "Dados inválidos" };
   }
@@ -69,6 +69,104 @@ export async function criarSecretaria(dados: { nome: string }): Promise<Resultad
     return {
       sucesso: false,
       erro: error.code === "23505" ? "Já existe uma secretaria com esse nome." : "Não foi possível criar a secretaria.",
+    };
+  }
+
+  revalidar();
+  return { sucesso: true };
+}
+
+const esquemaAtualizarCatalogo = z.object({
+  nome: z.string().trim().min(2).max(120),
+  ativo: z.boolean(),
+});
+
+/**
+ * Renomear já era permitido pela RLS (`admin_gerencia_secretarias`, ALL
+ * para admin/diretor) — só faltava esta action/UI. `ativo=false` some a
+ * secretaria das listas de distribuição/atribuição de acesso sem apagar
+ * nada (requerimentos e usuários já vinculados continuam mostrando o
+ * nome normalmente).
+ */
+export async function atualizarSecretaria(
+  id: string,
+  dados: { nome: string; ativo: boolean }
+): Promise<ResultadoConfig> {
+  if (!z.uuid().safeParse(id).success) {
+    return { sucesso: false, erro: "Identificador inválido" };
+  }
+  const analise = esquemaAtualizarCatalogo.safeParse(dados);
+  if (!analise.success) {
+    return { sucesso: false, erro: analise.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+
+  const supabase = await criarClienteServidor();
+  const { error } = await supabase
+    .from("secretarias")
+    .update({ nome: analise.data.nome, ativo: analise.data.ativo })
+    .eq("id", id);
+
+  if (error) {
+    console.error("[atualizarSecretaria] erro:", error);
+    return {
+      sucesso: false,
+      erro: error.code === "23505" ? "Já existe uma secretaria com esse nome." : "Não foi possível salvar a secretaria.",
+    };
+  }
+
+  revalidar();
+  return { sucesso: true };
+}
+
+/**
+ * Catálogo de vereadores — mesmo molde de secretarias (RLS
+ * `admin_gerencia_vereadores`, ALL para admin/diretor). Alimenta a lista
+ * suspensa do campo "Vereador" no cadastro de requerimento.
+ */
+export async function criarVereador(dados: { nome: string }): Promise<ResultadoConfig> {
+  const analise = esquemaCatalogo.safeParse(dados);
+  if (!analise.success) {
+    return { sucesso: false, erro: analise.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+
+  const supabase = await criarClienteServidor();
+  const { error } = await supabase.from("vereadores").insert({ nome: analise.data.nome });
+
+  if (error) {
+    console.error("[criarVereador] erro:", error);
+    return {
+      sucesso: false,
+      erro: error.code === "23505" ? "Já existe um vereador com esse nome." : "Não foi possível criar o vereador.",
+    };
+  }
+
+  revalidar();
+  return { sucesso: true };
+}
+
+export async function atualizarVereador(
+  id: string,
+  dados: { nome: string; ativo: boolean }
+): Promise<ResultadoConfig> {
+  if (!z.uuid().safeParse(id).success) {
+    return { sucesso: false, erro: "Identificador inválido" };
+  }
+  const analise = esquemaAtualizarCatalogo.safeParse(dados);
+  if (!analise.success) {
+    return { sucesso: false, erro: analise.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+
+  const supabase = await criarClienteServidor();
+  const { error } = await supabase
+    .from("vereadores")
+    .update({ nome: analise.data.nome, ativo: analise.data.ativo })
+    .eq("id", id);
+
+  if (error) {
+    console.error("[atualizarVereador] erro:", error);
+    return {
+      sucesso: false,
+      erro: error.code === "23505" ? "Já existe um vereador com esse nome." : "Não foi possível salvar o vereador.",
     };
   }
 

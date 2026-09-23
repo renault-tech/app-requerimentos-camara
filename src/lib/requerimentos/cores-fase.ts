@@ -14,6 +14,7 @@ export const COR_FASE: Record<Fase, string> = {
   distribuido: "#8A5E00",
   respondido: "#3B5C14",
   devolvido: "#475569",
+  anulado: "#52525B",
 };
 
 export const ROTULO_FASE: Record<Fase, string> = {
@@ -21,6 +22,7 @@ export const ROTULO_FASE: Record<Fase, string> = {
   distribuido: "Em andamento",
   respondido: "Pronto p/ devolver",
   devolvido: "Devolvido",
+  anulado: "Anulado",
 };
 
 export const COR_ATRASADO = "#C0392B";
@@ -36,6 +38,7 @@ export const COR_FASE_VIVA: Record<Fase, string> = {
   distribuido: "#EF9F27",
   respondido: "#639922",
   devolvido: "#94A3B8",
+  anulado: "#A1A1AA",
 };
 
 export const COR_ATRASADO_VIVA = "#E24B4A";

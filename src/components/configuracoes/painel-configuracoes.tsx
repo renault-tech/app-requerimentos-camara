@@ -7,31 +7,54 @@ import { useAcao } from "@/lib/hooks/usar-acao";
 import { ESTILO_CAMPO_PADRAO as ESTILO_CAMPO } from "@/lib/utils";
 import {
   atualizarConfigPrazo,
+  atualizarSecretaria,
+  atualizarVereador,
   criarSecretaria,
+  criarVereador,
   definirAcesso,
   definirAtuaComoGabinete,
+  type ResultadoConfig,
 } from "@/lib/actions/configuracoes";
 import { RUTULO_PERFIL } from "@/lib/auth/rotulos";
 import type { UsuarioComAcesso } from "@/lib/dados/configuracoes";
-import type { ConfigPrazo, PerfilUsuario, Secretaria } from "@/types/database";
+import type { ConfigPrazo, PerfilUsuario, Secretaria, Vereador } from "@/types/database";
 
 const PERFIS: PerfilUsuario[] = ["admin", "diretor", "gabinete", "secretaria"];
 
 export function PainelConfiguracoes({
   config,
   secretarias,
+  vereadores,
   usuarios,
   souAdmin,
 }: {
   config: ConfigPrazo;
   secretarias: Secretaria[];
+  vereadores: Vereador[];
   usuarios: UsuarioComAcesso[];
   souAdmin: boolean;
 }) {
   return (
     <div className="mt-5 space-y-6">
       <SecaoPrazo config={config} />
-      <SecaoSecretarias secretarias={secretarias} />
+      <SecaoCatalogo
+        titulo="Secretarias"
+        descricao="Catálogo usado para distribuir requerimentos. Renomeie ao mudar o nome oficial de uma secretaria, ou desative uma extinta/fundida — nada é apagado, o histórico continua mostrando o nome normalmente."
+        rotuloNovo="Nova secretaria"
+        placeholderNovo="Ex.: Obras"
+        itens={secretarias}
+        onCriar={(nome) => criarSecretaria({ nome })}
+        onAtualizar={(id, dados) => atualizarSecretaria(id, dados)}
+      />
+      <SecaoCatalogo
+        titulo="Vereadores"
+        descricao="Alimenta a lista suspensa do campo Vereador ao cadastrar um requerimento. Desative ao fim do mandato/afastamento — o cadastro sempre permite digitar um nome fora da lista (suplente, nome novo) via a opção Outro."
+        rotuloNovo="Novo vereador"
+        placeholderNovo="Ex.: Fulano de Tal"
+        itens={vereadores}
+        onCriar={(nome) => criarVereador({ nome })}
+        onAtualizar={(id, dados) => atualizarVereador(id, dados)}
+      />
       {souAdmin && <SecaoUsuarios usuarios={usuarios} secretarias={secretarias} />}
     </div>
   );
@@ -110,40 +133,136 @@ function Campo({
   );
 }
 
-function SecaoSecretarias({ secretarias }: { secretarias: Secretaria[] }) {
-  const acao = useAcao();
+type ItemCatalogo = { id: string; nome: string; ativo: boolean };
+
+/**
+ * CRUD genérico de catálogo (nome único + ativo) — reusado por Secretarias
+ * e Vereadores, que têm exatamente a mesma forma e as mesmas regras
+ * (renomear livre, desativar em vez de apagar). Regra da casa: nunca
+ * duplicar a mesma UI entre dois catálogos quase idênticos.
+ */
+function SecaoCatalogo({
+  titulo,
+  descricao,
+  rotuloNovo,
+  placeholderNovo,
+  itens,
+  onCriar,
+  onAtualizar,
+}: {
+  titulo: string;
+  descricao: string;
+  rotuloNovo: string;
+  placeholderNovo: string;
+  itens: ItemCatalogo[];
+  onCriar: (nome: string) => Promise<ResultadoConfig>;
+  onAtualizar: (id: string, dados: { nome: string; ativo: boolean }) => Promise<ResultadoConfig>;
+}) {
+  const acaoCriar = useAcao();
   const [nome, setNome] = React.useState("");
+  const [editandoId, setEditandoId] = React.useState<string | null>(null);
+
+  const ordenados = [...itens].sort((a, b) =>
+    a.ativo === b.ativo ? a.nome.localeCompare(b.nome, "pt-BR") : a.ativo ? -1 : 1
+  );
 
   return (
-    <Cartao titulo="Secretarias" descricao="Catálogo usado para distribuir requerimentos.">
-      <ul className="flex flex-wrap gap-1.5">
-        {secretarias.map((s) => (
-          <li key={s.id} className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs">
-            {s.nome}
-          </li>
-        ))}
-        {secretarias.length === 0 && <li className="text-xs text-slate-400">Nenhuma cadastrada.</li>}
+    <Cartao titulo={titulo} descricao={descricao}>
+      <ul className="space-y-1.5">
+        {ordenados.map((item) =>
+          editandoId === item.id ? (
+            <LinhaCatalogoEdicao
+              key={item.id}
+              item={item}
+              onSalvar={onAtualizar}
+              onFechar={() => setEditandoId(null)}
+            />
+          ) : (
+            <LinhaCatalogo key={item.id} item={item} onEditar={() => setEditandoId(item.id)} />
+          )
+        )}
+        {itens.length === 0 && <li className="text-xs text-slate-400">Nenhum cadastrado.</li>}
       </ul>
       <div className="mt-3 flex items-end gap-2">
         <div className="flex-1">
-          <label className="text-xs text-slate-500">Nova secretaria</label>
+          <label className="text-xs text-slate-500">{rotuloNovo}</label>
           <input
             value={nome}
             onChange={(e) => setNome(e.target.value)}
-            placeholder="Ex.: Obras"
+            placeholder={placeholderNovo}
             className={`${ESTILO_CAMPO} mt-1 w-full`}
           />
         </div>
         <Button
           size="sm"
-          disabled={acao.pendente || nome.trim().length < 2}
-          onClick={() => acao.executar(() => criarSecretaria({ nome }), () => setNome(""))}
+          disabled={acaoCriar.pendente || nome.trim().length < 2}
+          onClick={() => acaoCriar.executar(() => onCriar(nome), () => setNome(""))}
         >
           Adicionar
         </Button>
       </div>
-      {acao.erro && <p className="mt-2 text-xs text-red-700">{acao.erro}</p>}
+      {acaoCriar.erro && <p className="mt-2 text-xs text-red-700">{acaoCriar.erro}</p>}
     </Cartao>
+  );
+}
+
+function LinhaCatalogo({ item, onEditar }: { item: ItemCatalogo; onEditar: () => void }) {
+  return (
+    <li className="flex items-center justify-between gap-2 rounded-md border border-slate-100 bg-white px-2.5 py-1.5 text-sm">
+      <span className={item.ativo ? "" : "text-slate-400 line-through"}>
+        {item.nome}
+        {!item.ativo && <span className="ml-2 text-[11px] font-normal no-underline text-amber-700">(inativo)</span>}
+      </span>
+      <Button size="sm" variant="outline" onClick={onEditar}>
+        Editar
+      </Button>
+    </li>
+  );
+}
+
+function LinhaCatalogoEdicao({
+  item,
+  onSalvar,
+  onFechar,
+}: {
+  item: ItemCatalogo;
+  onSalvar: (id: string, dados: { nome: string; ativo: boolean }) => Promise<ResultadoConfig>;
+  onFechar: () => void;
+}) {
+  const acao = useAcao();
+  const [nome, setNome] = React.useState(item.nome);
+  const [ativo, setAtivo] = React.useState(item.ativo);
+
+  return (
+    <li className="rounded-md border border-slate-200 bg-slate-50 p-2">
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="flex-1">
+          <label className="text-xs text-slate-500">Nome</label>
+          <input
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            className={`${ESTILO_CAMPO} mt-1 w-full`}
+          />
+        </div>
+        <label className="flex items-center gap-1.5 pb-2 text-xs text-slate-600">
+          <input type="checkbox" checked={ativo} onChange={(e) => setAtivo(e.target.checked)} />
+          Ativo
+        </label>
+      </div>
+      {acao.erro && <p className="mt-1.5 text-xs text-red-700">{acao.erro}</p>}
+      <div className="mt-2 flex gap-2">
+        <Button
+          size="sm"
+          disabled={acao.pendente || nome.trim().length < 2}
+          onClick={() => acao.executar(() => onSalvar(item.id, { nome, ativo }), onFechar)}
+        >
+          {acao.pendente ? "Salvando…" : "Salvar"}
+        </Button>
+        <Button size="sm" variant="ghost" disabled={acao.pendente} onClick={onFechar}>
+          Cancelar
+        </Button>
+      </div>
+    </li>
   );
 }
 
@@ -308,11 +427,14 @@ function FormularioAcesso({
               className={`${ESTILO_CAMPO} mt-1 w-full`}
             >
               <option value="">Selecione…</option>
-              {secretarias.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.nome}
-                </option>
-              ))}
+              {secretarias
+                .filter((s) => s.ativo || s.id === secretariaId)
+                .map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.nome}
+                    {!s.ativo ? " (inativa)" : ""}
+                  </option>
+                ))}
             </select>
           </div>
         )}
