@@ -54,6 +54,12 @@ export type Requerimento = {
   devolvido_em: string | null;
   protocolo_devolucao: string | null;
   criado_em: string;
+  /** Anexos do PRÓPRIO requerimento (o documento em PDF a ser enviado às
+   * secretarias) — caminhos no bucket `requerimentos-anexos`, caminho
+   * `{id}/documento/{arquivo}`. Diferente de `RequerimentoSecretaria.anexos`
+   * (anexo da RESPOSTA de cada secretaria). Só gabinete grava
+   * (`anexar_documento`, sempre um append), na criação ou depois. */
+  anexos: string[];
 };
 
 /** Junção multi-secretaria: um requerimento pode ir a mais de uma secretaria. */
@@ -61,6 +67,10 @@ export type RequerimentoSecretaria = {
   id: string;
   requerimento_id: string;
   secretaria_id: string;
+  /** Confirmação explícita de recebimento — só um clique em "Dar ciência"
+   * (pela própria secretaria ou pelo gabinete) grava esta data, nunca
+   * automático. Não é pré-requisito para `respondida_em`. */
+  ciencia_em: string | null;
   respondida_em: string | null;
   /** Caminhos no bucket `requerimentos-anexos` (não URLs — bucket privado,
    * resolvido para signed URL na leitura). Gravado só uma vez, junto com
@@ -83,7 +93,9 @@ export type Prorrogacao = {
 export type TipoEvento =
   | "criado"
   | "distribuido"
+  | "secretaria_deu_ciencia"
   | "secretaria_respondeu"
+  | "documento_anexado"
   | "prorrogacao_solicitada"
   | "prorrogacao_decidida"
   | "devolvido";
@@ -164,6 +176,14 @@ export type Database = {
       };
       marcar_respondida: {
         Args: { p_requerimento: string; p_secretaria: string; p_anexos?: string[] };
+        Returns: undefined;
+      };
+      dar_ciencia: {
+        Args: { p_requerimento: string; p_secretaria: string };
+        Returns: undefined;
+      };
+      anexar_documento: {
+        Args: { p_requerimento: string; p_anexos: string[] };
         Returns: undefined;
       };
       solicitar_prorrogacao: {

@@ -11,10 +11,18 @@ export type AnexoResposta = {
   nomeArquivo: string;
 };
 
+/** Mesma forma de `AnexoResposta` — anexo do documento do requerimento em
+ * si (não da resposta de uma secretaria). Tipo próprio para deixar
+ * explícito de qual anexo se trata em cada tela. */
+export type AnexoDocumento = AnexoResposta;
+
 export type SecretariaDoRequerimento = {
   id: string;
   secretariaId: string;
   nomeSecretaria: string;
+  /** Confirmação de recebimento, dada por um clique explícito — não
+   * pré-requisito de `respondidaEm`. */
+  cienciaEm: string | null;
   respondidaEm: string | null;
   anexos: AnexoResposta[];
 };
@@ -30,6 +38,8 @@ export type RequerimentoDaLista = {
   devolvidoEm: string | null;
   protocoloDevolucao: string | null;
   secretarias: SecretariaDoRequerimento[];
+  /** Documento do próprio requerimento (ex.: PDF a enviar às secretarias). */
+  anexos: AnexoDocumento[];
   fase: Fase;
   diasRestantes: number;
   prazo: CategoriaPrazo;
@@ -73,8 +83,12 @@ export async function listarRequerimentos(): Promise<RequerimentoDaLista[]> {
 
   // Bucket privado — resolve todas as signed URLs de uma vez (não uma
   // chamada por anexo), validade curta (10 min), igual ao padrão já usado
-  // pelo Feedback do App-Compras.
-  const todosOsCaminhos = (vinculos ?? []).flatMap((v) => v.anexos ?? []);
+  // pelo Feedback do App-Compras. Junta os dois tipos de anexo (resposta
+  // de secretaria + documento do próprio requerimento) numa única chamada.
+  const todosOsCaminhos = [
+    ...(vinculos ?? []).flatMap((v) => v.anexos ?? []),
+    ...(requerimentos ?? []).flatMap((r) => r.anexos ?? []),
+  ];
   const urlPorCaminho = new Map<string, string | null>();
   if (todosOsCaminhos.length > 0) {
     const { data: assinadas, error: erroAssinadas } = await supabase.storage
@@ -95,6 +109,7 @@ export async function listarRequerimentos(): Promise<RequerimentoDaLista[]> {
         id: v.id,
         secretariaId: v.secretaria_id,
         nomeSecretaria: nomePorSecretaria.get(v.secretaria_id) ?? "?",
+        cienciaEm: v.ciencia_em,
         respondidaEm: v.respondida_em,
         anexos: (v.anexos ?? []).map((caminho) => ({
           caminho,
@@ -118,6 +133,11 @@ export async function listarRequerimentos(): Promise<RequerimentoDaLista[]> {
       devolvidoEm: r.devolvido_em,
       protocoloDevolucao: r.protocolo_devolucao,
       secretarias: secretariasDoRequerimento,
+      anexos: (r.anexos ?? []).map((caminho) => ({
+        caminho,
+        url: urlPorCaminho.get(caminho) ?? null,
+        nomeArquivo: caminho.split("/").pop() ?? caminho,
+      })),
       fase,
       diasRestantes,
       prazo: categoriaPrazo(diasRestantes, config),

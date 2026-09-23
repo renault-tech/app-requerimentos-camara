@@ -108,6 +108,52 @@ export async function marcarRespondida(
   return { sucesso: true };
 }
 
+export async function darCiencia(
+  requerimentoId: string,
+  secretariaId: string
+): Promise<ResultadoRequerimento> {
+  if (!z.uuid().safeParse(requerimentoId).success || !z.uuid().safeParse(secretariaId).success) {
+    return { sucesso: false, erro: "Identificador inválido" };
+  }
+
+  const supabase = await criarClienteServidor();
+  const { error } = await supabase.rpc("dar_ciencia", {
+    p_requerimento: requerimentoId,
+    p_secretaria: secretariaId,
+  });
+
+  if (error) {
+    console.error("[darCiencia] erro na RPC:", error);
+    return { sucesso: false, erro: traduzirErro(error.message) };
+  }
+
+  revalidarTudo();
+  return { sucesso: true };
+}
+
+export async function anexarDocumento(
+  requerimentoId: string,
+  anexos: string[]
+): Promise<ResultadoRequerimento> {
+  if (!z.uuid().safeParse(requerimentoId).success || anexos.length === 0) {
+    return { sucesso: false, erro: "Selecione ao menos um arquivo" };
+  }
+
+  const supabase = await criarClienteServidor();
+  const { error } = await supabase.rpc("anexar_documento", {
+    p_requerimento: requerimentoId,
+    p_anexos: anexos,
+  });
+
+  if (error) {
+    console.error("[anexarDocumento] erro na RPC:", error);
+    return { sucesso: false, erro: traduzirErro(error.message) };
+  }
+
+  revalidarTudo();
+  return { sucesso: true };
+}
+
 export async function solicitarProrrogacao(
   requerimentoId: string,
   dias: number,

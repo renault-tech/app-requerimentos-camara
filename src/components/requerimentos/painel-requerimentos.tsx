@@ -24,12 +24,14 @@ import { criarClienteNavegador } from "@/lib/supabase/client";
 import {
   criarRequerimento,
   distribuirRequerimento,
+  darCiencia,
   marcarRespondida,
+  anexarDocumento,
   solicitarProrrogacao,
   devolverACamara,
   type ResultadoRequerimento,
 } from "@/lib/actions/requerimentos";
-import type { RequerimentoDaLista, SecretariaDoRequerimento } from "@/lib/dados/requerimentos";
+import type { AnexoDocumento, RequerimentoDaLista, SecretariaDoRequerimento } from "@/lib/dados/requerimentos";
 import type { Fase } from "@/lib/requerimentos/status";
 import {
   COR_FASE,
@@ -59,6 +61,7 @@ const EXPORT_COLS: ColunaExportavel<RequerimentoDaLista>[] = [
   { key: "distribuido_em", rotulo: "Distribuído em", valor: (r) => r.distribuidoEm ?? "" },
   { key: "devolvido_em", rotulo: "Devolvido em", valor: (r) => r.devolvidoEm ?? "" },
   { key: "protocolo", rotulo: "Protocolo devolução", valor: (r) => r.protocoloDevolucao ?? "" },
+  { key: "documento", rotulo: "Documento anexado", valor: (r) => (r.anexos.length > 0 ? "Sim" : "Não") },
   { key: "fase", rotulo: "Status", valor: (r) => ROTULO_FASE[r.fase] },
   { key: "atrasado", rotulo: "Atrasado", valor: (r) => (r.atrasado ? "Sim" : "Não") },
 ];
@@ -510,7 +513,12 @@ function DetalheRequerimento({
           pode haver mais de uma resposta a consolidar. */}
       {podeDistribuir && requerimento.fase !== "devolvido" && (
         <div className="flex flex-wrap items-start gap-2 border-b border-slate-100 pb-3">
-          {secretariasDisponiveis.length > 0 &&
+          {/* Distribuição é um ato único: uma vez `distribuidoEm` preenchido, o
+              requerimento não pode ser distribuído de novo (nem para
+              acrescentar mais secretarias) — a RPC também recusa, esta
+              condição só evita o usuário chegar a tentar. */}
+          {!requerimento.distribuidoEm &&
+            secretariasDisponiveis.length > 0 &&
             (!mostrarDistribuicao ? (
               <Button size="sm" variant="outline" onClick={() => setMostrarDistribuicao(true)}>
                 Distribuir
@@ -584,7 +592,8 @@ function DetalheRequerimento({
                   requerimentoId={requerimento.id}
                   secretaria={s}
                   podeMarcar={souEu || podeDistribuir}
-                  ehBaixaPeloGabinete={podeDistribuir && !souEu}
+                  podeDarCiencia={souEu || podeDistribuir}
+                  ehPeloGabinete={podeDistribuir && !souEu}
                 />
               );
             })}
@@ -608,7 +617,155 @@ function DetalheRequerimento({
             )}
           </p>
         </div>
+
+        <div className="sm:col-span-2">
+          <DocumentoRequerimento
+            requerimentoId={requerimento.id}
+            anexos={requerimento.anexos}
+            podeAnexar={podeDistribuir}
+          />
+        </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Documento do próprio requerimento (o PDF a ser enviado às secretarias) —
+ * diferente do anexo de resposta de cada `LinhaSecretaria`. Só o Gabinete
+ * pode anexar (`anexarDocumento`, sempre um append no servidor); qualquer
+ * um que veja o requerimento pode baixar. Upload direto do navegador para o
+ * Storage, mesmo padrão já usado em `LinhaSecretaria`.
+ */
+function DocumentoRequerimento({
+  requerimentoId,
+  anexos,
+  podeAnexar,
+}: {
+  requerimentoId: string;
+  anexos: AnexoDocumento[];
+  podeAnexar: boolean;
+}) {
+  const acao = useAcao();
+  const [arquivos, setArquivos] = React.useState<File[]>([]);
+  const [avisoArquivo, setAvisoArquivo] = React.useState<string | null>(null);
+
+  function selecionarArquivos(lista: FileList | null) {
+    if (!lista) return;
+    const aceitos: File[] = [];
+    const rejeitados: string[] = [];
+    for (const arquivo of Array.from(lista)) {
+      if (arquivo.size > TAMANHO_MAXIMO_ANEXO) {
+        rejeitados.push(arquivo.name);
+      } else {
+        aceitos.push(arquivo);
+      }
+    }
+    setArquivos((prev) => [...prev, ...aceitos]);
+    setAvisoArquivo(rejeitados.length > 0 ? `Maior que 5 MB, não enviado: ${rejeitados.join(", ")}` : null);
+  }
+
+  async function enviar(): Promise<ResultadoRequerimento> {
+    if (arquivos.length === 0) {
+      return { sucesso: false, erro: "Selecione ao menos um arquivo" };
+    }
+    const supabase = criarClienteNavegador();
+    const caminhos: string[] = [];
+    for (const arquivo of arquivos) {
+      const caminho = `${requerimentoId}/documento/${Date.now()}-${arquivo.name}`;
+      const { error } = await supabase.storage.from("requerimentos-anexos").upload(caminho, arquivo);
+      if (error) {
+        return { sucesso: false, erro: `Falha ao enviar ${arquivo.name}: ${error.message}` };
+      }
+      caminhos.push(caminho);
+    }
+    return anexarDocumento(requerimentoId, caminhos);
+  }
+
+  return (
+    <div>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        Documento do requerimento
+      </h3>
+      {anexos.length > 0 ? (
+        <ul className="mt-2 flex flex-wrap gap-1.5">
+          {anexos.map((a) => (
+            <li key={a.caminho}>
+              {a.url ? (
+                <a
+                  href={a.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-cataguases-azul hover:underline"
+                >
+                  <Paperclip className="h-3 w-3" aria-hidden />
+                  {a.nomeArquivo}
+                </a>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-400">
+                  <Paperclip className="h-3 w-3" aria-hidden />
+                  {a.nomeArquivo} (link expirado)
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-sm text-slate-400">Nenhum documento anexado ainda.</p>
+      )}
+
+      {podeAnexar && (
+        <div className="mt-2">
+          <input
+            type="file"
+            multiple
+            accept="image/*,application/pdf,text/plain"
+            onChange={(e) => {
+              selecionarArquivos(e.target.files);
+              e.target.value = "";
+            }}
+            className="block w-full text-xs text-slate-500"
+          />
+          {arquivos.length > 0 && (
+            <ul className="mt-1.5 flex flex-wrap gap-1.5">
+              {arquivos.map((arquivo, i) => (
+                <li
+                  key={`${arquivo.name}-${i}`}
+                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-600"
+                >
+                  {arquivo.name}
+                  <button
+                    type="button"
+                    aria-label={`Remover ${arquivo.name}`}
+                    onClick={() => setArquivos((prev) => prev.filter((_, j) => j !== i))}
+                  >
+                    <X className="h-3 w-3" aria-hidden />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {avisoArquivo && <p className="mt-1 text-[11px] text-amber-700">{avisoArquivo}</p>}
+          {acao.erro && <p className="mt-1.5 text-xs text-red-700">{acao.erro}</p>}
+          {arquivos.length > 0 && (
+            <div className="mt-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={acao.pendente}
+                onClick={() =>
+                  acao.executar(enviar, () => {
+                    setArquivos([]);
+                    setAvisoArquivo(null);
+                  })
+                }
+              >
+                {acao.pendente ? "Enviando…" : "Anexar documento"}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -681,14 +838,17 @@ function LinhaSecretaria({
   requerimentoId,
   secretaria,
   podeMarcar,
-  ehBaixaPeloGabinete,
+  podeDarCiencia,
+  ehPeloGabinete,
 }: {
   requerimentoId: string;
   secretaria: SecretariaDoRequerimento;
   podeMarcar: boolean;
-  ehBaixaPeloGabinete: boolean;
+  podeDarCiencia: boolean;
+  ehPeloGabinete: boolean;
 }) {
   const acao = useAcao();
+  const acaoCiencia = useAcao();
   const [respondendo, setRespondendo] = React.useState(false);
   const [arquivos, setArquivos] = React.useState<File[]>([]);
   const [avisoArquivo, setAvisoArquivo] = React.useState<string | null>(null);
@@ -724,25 +884,46 @@ function LinhaSecretaria({
     return marcarRespondida(requerimentoId, secretaria.secretariaId, caminhos);
   }
 
-  const rotuloBotao = ehBaixaPeloGabinete ? "Dar baixa (Gabinete)" : "Marcar respondida";
+  const rotuloBotao = ehPeloGabinete ? "Dar baixa (Gabinete)" : "Marcar respondida";
+  const rotuloCiencia = ehPeloGabinete ? "Dar ciência (Gabinete)" : "Dar ciência";
 
   return (
     <li className="rounded-md border border-slate-100 bg-white p-1.5 text-sm">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <span>
           {secretaria.nomeSecretaria}
+          {secretaria.cienciaEm ? (
+            <span className="ml-2 text-xs text-cataguases-azul">ciência em {secretaria.cienciaEm}</span>
+          ) : (
+            <span className="ml-2 text-xs text-amber-700">aguardando ciência</span>
+          )}
           {secretaria.respondidaEm ? (
             <span className="ml-2 text-xs text-green-700">respondida em {secretaria.respondidaEm}</span>
           ) : (
             <span className="ml-2 text-xs text-slate-400">pendente</span>
           )}
         </span>
-        {!secretaria.respondidaEm && podeMarcar && !respondendo && (
-          <Button size="sm" variant="outline" onClick={() => setRespondendo(true)}>
-            {rotuloBotao}
-          </Button>
-        )}
+        <div className="flex items-center gap-1.5">
+          {!secretaria.cienciaEm && podeDarCiencia && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={acaoCiencia.pendente}
+              onClick={() =>
+                acaoCiencia.executar(() => darCiencia(requerimentoId, secretaria.secretariaId))
+              }
+            >
+              {acaoCiencia.pendente ? "Confirmando…" : rotuloCiencia}
+            </Button>
+          )}
+          {!secretaria.respondidaEm && podeMarcar && !respondendo && (
+            <Button size="sm" variant="outline" onClick={() => setRespondendo(true)}>
+              {rotuloBotao}
+            </Button>
+          )}
+        </div>
       </div>
+      {acaoCiencia.erro && <p className="mt-1 text-xs text-red-700">{acaoCiencia.erro}</p>}
 
       {secretaria.anexos.length > 0 && (
         <ul className="mt-1.5 flex flex-wrap gap-1.5">
@@ -933,6 +1114,8 @@ function ModalNovoRequerimento({
   const [assunto, setAssunto] = React.useState("");
   const [recebidoEm, setRecebidoEm] = React.useState(() => dataNoFuso(new Date()));
   const [diasTotal, setDiasTotal] = React.useState(diasPadrao);
+  const [arquivos, setArquivos] = React.useState<File[]>([]);
+  const [avisoArquivo, setAvisoArquivo] = React.useState<string | null>(null);
 
   function limpar() {
     setNumero("");
@@ -940,6 +1123,49 @@ function ModalNovoRequerimento({
     setAssunto("");
     setRecebidoEm(dataNoFuso(new Date()));
     setDiasTotal(diasPadrao);
+    setArquivos([]);
+    setAvisoArquivo(null);
+  }
+
+  function selecionarArquivos(lista: FileList | null) {
+    if (!lista) return;
+    const aceitos: File[] = [];
+    const rejeitados: string[] = [];
+    for (const arquivo of Array.from(lista)) {
+      if (arquivo.size > TAMANHO_MAXIMO_ANEXO) {
+        rejeitados.push(arquivo.name);
+      } else {
+        aceitos.push(arquivo);
+      }
+    }
+    setArquivos((prev) => [...prev, ...aceitos]);
+    setAvisoArquivo(rejeitados.length > 0 ? `Maior que 5 MB, não enviado: ${rejeitados.join(", ")}` : null);
+  }
+
+  /**
+   * Cria o requerimento e, se houver arquivos selecionados, anexa-os em
+   * seguida — falha ao anexar não desfaz a criação (o requerimento já
+   * existe; o usuário pode anexar depois pelo detalhe), só vira um aviso.
+   */
+  async function criarComAnexo() {
+    const resultado = await criarRequerimento({ numero, vereador, assunto, recebidoEm, diasTotal });
+    if (!resultado.sucesso || arquivos.length === 0) return resultado;
+
+    const supabase = criarClienteNavegador();
+    const caminhos: string[] = [];
+    for (const arquivo of arquivos) {
+      const caminho = `${resultado.id}/documento/${Date.now()}-${arquivo.name}`;
+      const { error } = await supabase.storage.from("requerimentos-anexos").upload(caminho, arquivo);
+      if (error) {
+        return { ...resultado, aviso: `Requerimento criado, mas falha ao anexar ${arquivo.name}: ${error.message}` };
+      }
+      caminhos.push(caminho);
+    }
+    const anexoResultado = await anexarDocumento(resultado.id, caminhos);
+    if (!anexoResultado.sucesso) {
+      return { ...resultado, aviso: `Requerimento criado, mas falha ao anexar documento: ${anexoResultado.erro}` };
+    }
+    return resultado;
   }
 
   return (
@@ -996,7 +1222,41 @@ function ModalNovoRequerimento({
               />
             </div>
           </div>
+          <div>
+            <label className="text-xs text-slate-500">Documento do requerimento (opcional)</label>
+            <input
+              type="file"
+              multiple
+              accept="image/*,application/pdf,text/plain"
+              onChange={(e) => {
+                selecionarArquivos(e.target.files);
+                e.target.value = "";
+              }}
+              className="mt-1 block w-full text-xs text-slate-500"
+            />
+            {arquivos.length > 0 && (
+              <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                {arquivos.map((arquivo, i) => (
+                  <li
+                    key={`${arquivo.name}-${i}`}
+                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-600"
+                  >
+                    {arquivo.name}
+                    <button
+                      type="button"
+                      aria-label={`Remover ${arquivo.name}`}
+                      onClick={() => setArquivos((prev) => prev.filter((_, j) => j !== i))}
+                    >
+                      <X className="h-3 w-3" aria-hidden />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {avisoArquivo && <p className="mt-1 text-[11px] text-amber-700">{avisoArquivo}</p>}
+          </div>
           {acao.erro && <p className="text-xs text-red-700">{acao.erro}</p>}
+          {acao.aviso && <p className="text-xs text-amber-700">{acao.aviso}</p>}
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" onClick={onFechar}>
               Cancelar
@@ -1004,13 +1264,10 @@ function ModalNovoRequerimento({
             <Button
               disabled={acao.pendente || !numero || !vereador || !assunto}
               onClick={() =>
-                acao.executar(
-                  () => criarRequerimento({ numero, vereador, assunto, recebidoEm, diasTotal }),
-                  () => {
-                    limpar();
-                    onFechar();
-                  }
-                )
+                acao.executar(criarComAnexo, () => {
+                  limpar();
+                  onFechar();
+                })
               }
             >
               {acao.pendente ? "Salvando…" : "Cadastrar"}
