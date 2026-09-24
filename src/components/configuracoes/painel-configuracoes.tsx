@@ -273,8 +273,21 @@ function SecaoUsuarios({
   usuarios: UsuarioComAcesso[];
   secretarias: Secretaria[];
 }) {
-  const [editando, setEditando] = React.useState<UsuarioComAcesso | null>(null);
-  const [mostrarForm, setMostrarForm] = React.useState(false);
+  // Bug real (mesmo relatado e corrigido no Hub): o formulário de edição
+  // usava um único estado compartilhado por toda a tabela e sempre
+  // renderizava ABAIXO dela inteira — clicar em "Editar" numa das
+  // primeiras linhas de uma tabela longa mudava o estado corretamente,
+  // mas o formulário abria fora da área visível, parecendo não fazer
+  // nada. Corrigido abrindo o formulário dentro da própria linha (mesmo
+  // padrão já usado em `SecaoCatalogo`/`LinhaCatalogoEdicao` neste mesmo
+  // arquivo, e no App-Compras para Processos/Contratos).
+  const [editandoId, setEditandoId] = React.useState<string | null>(null);
+  const [criandoNovo, setCriandoNovo] = React.useState(false);
+
+  function alternarEdicao(id: string) {
+    setCriandoNovo(false);
+    setEditandoId((atual) => (atual === id ? null : id));
+  }
 
   return (
     <Cartao
@@ -295,9 +308,30 @@ function SecaoUsuarios({
             </tr>
           </thead>
           <tbody>
-            {usuarios.map((u) => (
-              <LinhaUsuario key={u.id} usuario={u} secretarias={secretarias} onEditar={() => { setEditando(u); setMostrarForm(true); }} />
-            ))}
+            {usuarios.map((u) => {
+              const aberto = editandoId === u.id;
+              return (
+                <React.Fragment key={u.id}>
+                  <LinhaUsuario
+                    usuario={u}
+                    secretarias={secretarias}
+                    aberto={aberto}
+                    onEditar={() => alternarEdicao(u.id)}
+                  />
+                  {aberto && (
+                    <tr className="border-b border-slate-100">
+                      <td colSpan={7} className="bg-slate-50 p-3">
+                        <FormularioAcesso
+                          secretarias={secretarias}
+                          usuario={u}
+                          onFechar={() => setEditandoId(null)}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
             {usuarios.length === 0 && (
               <tr>
                 <td colSpan={7} className="py-4 text-center text-xs text-slate-400">
@@ -309,16 +343,14 @@ function SecaoUsuarios({
         </table>
       </div>
 
-      {!mostrarForm ? (
-        <Button size="sm" className="mt-3" onClick={() => { setEditando(null); setMostrarForm(true); }}>
+      {!criandoNovo ? (
+        <Button size="sm" className="mt-3" onClick={() => { setEditandoId(null); setCriandoNovo(true); }}>
           Conceder acesso
         </Button>
       ) : (
-        <FormularioAcesso
-          secretarias={secretarias}
-          usuario={editando}
-          onFechar={() => setMostrarForm(false)}
-        />
+        <div className="mt-3">
+          <FormularioAcesso secretarias={secretarias} usuario={null} onFechar={() => setCriandoNovo(false)} />
+        </div>
       )}
     </Cartao>
   );
@@ -327,10 +359,12 @@ function SecaoUsuarios({
 function LinhaUsuario({
   usuario,
   secretarias,
+  aberto,
   onEditar,
 }: {
   usuario: UsuarioComAcesso;
   secretarias: Secretaria[];
+  aberto: boolean;
   onEditar: () => void;
 }) {
   const acaoGabinete = useAcao();
@@ -362,7 +396,7 @@ function LinhaUsuario({
       </td>
       <td className="py-1.5 pr-3">
         <Button size="sm" variant="outline" onClick={onEditar}>
-          Editar
+          {aberto ? "Fechar" : "Editar"}
         </Button>
       </td>
     </tr>
@@ -386,7 +420,7 @@ function FormularioAcesso({
   const [ativo, setAtivo] = React.useState(usuario?.ativo ?? true);
 
   return (
-    <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+    <div className="rounded-md border border-slate-200 bg-white p-3">
       <p className="text-xs font-medium text-slate-600">
         {usuario ? `Editando acesso de ${usuario.nome}` : "Conceder novo acesso"}
       </p>
