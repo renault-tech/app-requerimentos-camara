@@ -37,12 +37,28 @@ async function origemDaRequisicao(): Promise<string> {
   return `${proto}://${host}`;
 }
 
-/** Impede open redirect: só aceita caminhos internos de um único segmento raiz. */
+/**
+ * Impede open redirect. Achado de auditoria de segurança: o filtro
+ * anterior (`startsWith("/") && !startsWith("//")`) não barra
+ * `/\evil.com` — o parser de URL (WHATWG, usado tanto pelo `new URL()`
+ * quanto pela resolução do header `Location` no navegador) normaliza `\`
+ * para `/` em esquemas especiais, então `/\evil.com` vira `//evil.com` →
+ * autoridade `evil.com`. Confirmado ao vivo (`new URL("/\\evil.com",
+ * base)` resolve para `https://evil.com/`). Corrigido resolvendo o valor
+ * com o MESMO parser que vai processar o redirect de verdade, e só
+ * aceitando quando a origem resultante não mudou.
+ */
 function destinoSeguro(valor: FormDataEntryValue | null): string {
-  if (typeof valor === "string" && valor.startsWith("/") && !valor.startsWith("//")) {
-    return valor;
+  const fallback = "/dashboard";
+  if (typeof valor !== "string" || !valor) return fallback;
+  try {
+    const base = "http://localhost";
+    const resolvido = new URL(valor, base);
+    if (resolvido.origin !== base) return fallback;
+    return resolvido.pathname + resolvido.search + resolvido.hash;
+  } catch {
+    return fallback;
   }
-  return "/dashboard";
 }
 
 export async function entrar(
