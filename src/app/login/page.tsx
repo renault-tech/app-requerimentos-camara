@@ -55,13 +55,23 @@ export default async function PaginaLogin({
 }
 
 /** Central Cataguases → Configurações → Login direto por aplicativo. Nunca
- * bloqueia o próprio login se a checagem falhar (rede, schema hub fora do
- * ar) — o padrão seguro é continuar permitindo o login direto. */
+ * bloqueia o próprio login se a checagem falhar OU demorar (rede, schema
+ * hub fora do ar) — o padrão seguro é continuar permitindo o login direto.
+ * Timeout curto de propósito: esta checagem roda em TODA tentativa de
+ * login, então uma lentidão no projeto compartilhado nunca pode travar o
+ * login de ninguém aqui. */
 async function loginDiretoBloqueado(): Promise<boolean> {
   try {
-    const { data, error } = await criarClienteHub().rpc("esta_bloqueado_login_direto", {
-      p_modulo: "requerimentos",
-    });
+    const consulta = criarClienteHub().rpc("esta_bloqueado_login_direto", { p_modulo: "requerimentos" });
+    const resultado = await Promise.race([
+      consulta,
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500)),
+    ]);
+    if (!resultado) {
+      console.error("[loginDiretoBloqueado] timeout ao checar — seguindo com login direto liberado");
+      return false;
+    }
+    const { data, error } = resultado;
     if (error) {
       console.error("[loginDiretoBloqueado] falha ao checar:", error);
       return false;
