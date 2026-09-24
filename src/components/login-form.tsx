@@ -16,11 +16,13 @@ const ESTADO_INICIAL: EstadoLogin = {};
 export function FormularioLogin() {
   const searchParams = useSearchParams();
   const proximo = searchParams.get("proximo") ?? "";
+  const origem = searchParams.get("origem") ?? "";
   const [estado, formAction, pendente] = useActionState(entrar, ESTADO_INICIAL);
 
   return (
     <form action={formAction} className="w-full space-y-4">
       <input type="hidden" name="proximo" value={proximo} />
+      <input type="hidden" name="origem" value={origem} />
 
       <div className="space-y-1.5">
         <label htmlFor="email" className="text-sm font-medium text-slate-200">

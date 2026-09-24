@@ -3,6 +3,9 @@ import { Suspense } from "react";
 
 import { MolduraAuth } from "@/components/auth/moldura-auth";
 import { FormularioLogin } from "@/components/login-form";
+import { criarClienteHub } from "@/lib/supabase/hub-cliente";
+
+const URL_CENTRAL_CATAGUASES = "https://centraltech-liard.vercel.app";
 
 export const metadata: Metadata = {
   title: "Entrar · Requerimentos da Câmara",
@@ -17,22 +20,57 @@ const MENSAGENS: Record<string, string> = {
   senha_redefinida: "Senha redefinida com sucesso. Entre com a sua nova senha.",
 };
 
-export default function PaginaLogin({
+export default async function PaginaLogin({
   searchParams,
 }: {
   searchParams: Promise<{ motivo?: string }>;
 }) {
+  const bloqueado = await loginDiretoBloqueado();
+
   return (
     <MolduraAuth
       titulo="Entrar na plataforma"
       subtitulo="Prefeitura de Cataguases · Gabinete do Prefeito"
     >
-      <Suspense fallback={<div className="h-[220px] w-full" />}>
-        <MensagemMotivo searchParams={searchParams} />
-        <FormularioLogin />
-      </Suspense>
+      {bloqueado ? (
+        <div className="space-y-4 text-center">
+          <p className="text-sm text-slate-200">
+            O login direto foi desativado. Acesse pela Central Cataguases.
+          </p>
+          <a
+            href={`${URL_CENTRAL_CATAGUASES}?origem=requerimentos`}
+            className="inline-block w-full rounded-md bg-cataguases-dourado px-4 py-2.5 text-sm font-medium text-cataguases-marinho transition-colors hover:bg-cataguases-dourado/90"
+          >
+            Ir para a Central Cataguases
+          </a>
+        </div>
+      ) : (
+        <Suspense fallback={<div className="h-[220px] w-full" />}>
+          <MensagemMotivo searchParams={searchParams} />
+          <FormularioLogin />
+        </Suspense>
+      )}
     </MolduraAuth>
   );
+}
+
+/** Central Cataguases → Configurações → Login direto por aplicativo. Nunca
+ * bloqueia o próprio login se a checagem falhar (rede, schema hub fora do
+ * ar) — o padrão seguro é continuar permitindo o login direto. */
+async function loginDiretoBloqueado(): Promise<boolean> {
+  try {
+    const { data, error } = await criarClienteHub().rpc("esta_bloqueado_login_direto", {
+      p_modulo: "requerimentos",
+    });
+    if (error) {
+      console.error("[loginDiretoBloqueado] falha ao checar:", error);
+      return false;
+    }
+    return data === true;
+  } catch (e) {
+    console.error("[loginDiretoBloqueado] falha inesperada:", e);
+    return false;
+  }
 }
 
 async function MensagemMotivo({

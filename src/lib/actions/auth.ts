@@ -88,6 +88,14 @@ export async function entrar(
     return { erro: "Usuário desativado. Contate o administrador." };
   }
 
+  // Sinal de adoção do Hub (Configurações → Login direto, no Central
+  // Cataguases) — nunca bloqueia o login se falhar.
+  const origem = formData.get("origem") === "hub" ? "hub" : "direto";
+  const { error: erroOrigem } = await supabase.rpc("marcar_login_origem", { p_origem: origem });
+  if (erroOrigem) {
+    console.error("[entrar] marcar_login_origem falhou:", erroOrigem);
+  }
+
   redirect(destinoSeguro(formData.get("proximo")));
 }
 

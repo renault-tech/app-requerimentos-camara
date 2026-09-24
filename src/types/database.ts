@@ -15,6 +15,10 @@ export type Usuario = {
   secretaria_id: string | null;
   ativo: boolean;
   criado_em: string;
+  /** De onde veio o último login ("hub" | "direto") — cadastro unificado pelo Hub. */
+  ultimo_acesso_origem: string | null;
+  /** Preenchido quando `ultimo_acesso_origem = "hub"` — sinal de adoção do Hub. */
+  veio_do_hub_em: string | null;
 };
 
 export type Secretaria = {
@@ -227,6 +231,10 @@ export type Database = {
           p_ativo: boolean;
         };
         Returns: string;
+      };
+      marcar_login_origem: {
+        Args: { p_origem: "hub" | "direto" };
+        Returns: undefined;
       };
     };
     Enums: Record<string, never>;
