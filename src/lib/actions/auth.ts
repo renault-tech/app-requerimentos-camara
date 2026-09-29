@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { destinoSeguro } from "@/lib/seguranca/destino-seguro";
 import { criarClienteServidor } from "@/lib/supabase/server";
 import {
   esquemaLogin,
@@ -35,30 +36,6 @@ async function origemDaRequisicao(): Promise<string> {
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
   const proto = h.get("x-forwarded-proto") ?? "https";
   return `${proto}://${host}`;
-}
-
-/**
- * Impede open redirect. Achado de auditoria de segurança: o filtro
- * anterior (`startsWith("/") && !startsWith("//")`) não barra
- * `/\evil.com` — o parser de URL (WHATWG, usado tanto pelo `new URL()`
- * quanto pela resolução do header `Location` no navegador) normaliza `\`
- * para `/` em esquemas especiais, então `/\evil.com` vira `//evil.com` →
- * autoridade `evil.com`. Confirmado ao vivo (`new URL("/\\evil.com",
- * base)` resolve para `https://evil.com/`). Corrigido resolvendo o valor
- * com o MESMO parser que vai processar o redirect de verdade, e só
- * aceitando quando a origem resultante não mudou.
- */
-function destinoSeguro(valor: FormDataEntryValue | null): string {
-  const fallback = "/dashboard";
-  if (typeof valor !== "string" || !valor) return fallback;
-  try {
-    const base = "http://localhost";
-    const resolvido = new URL(valor, base);
-    if (resolvido.origin !== base) return fallback;
-    return resolvido.pathname + resolvido.search + resolvido.hash;
-  } catch {
-    return fallback;
-  }
 }
 
 export async function entrar(
@@ -112,18 +89,37 @@ export async function entrar(
     console.error("[entrar] marcar_login_origem falhou:", erroOrigem);
   }
 
-  redirect(destinoSeguro(formData.get("proximo")));
+  const proximo = formData.get("proximo");
+  redirect(destinoSeguro(typeof proximo === "string" ? proximo : null, "/dashboard"));
 }
 
 export async function sair(): Promise<void> {
   const supabase = await criarClienteServidor();
   await supabase.auth.signOut();
-  redirect("/login");
+  // ssoFalhou=1: sem isso, /login tentaria o SSO silencioso de novo e, se a
+  // sessão do Hub ainda estiver de pé, relogaria na hora — "Sair" deixaria
+  // de sair de verdade. Sair aqui é local (só deste app); para sair de
+  // tudo, a pessoa usa o "Sair" do próprio Hub.
+  redirect("/login?ssoFalhou=1");
 }
 
 /**
  * Envia o e-mail de recuperação de senha (Supabase Auth). Responde sempre
  * com sucesso genérico, sem revelar se o e-mail existe.
+ *
+ * Achado real (mesmo bug já corrigido no App-Compras e no centraltech):
+ * `redirectTo` apontava pra `/auth/confirm?next=/redefinir-senha`, uma rota
+ * de SERVIDOR que só lê `code`/`token_hash` da query string. O link padrão
+ * do e-mail de recuperação passa primeiro pelo endpoint hospedado do
+ * próprio GoTrue (`.../auth/v1/verify`), que autentica e só então
+ * redireciona pro `redirectTo`, anexando os tokens como FRAGMENTO da URL
+ * (`#access_token=...&type=recovery`), não como query string — um
+ * fragmento nunca chega ao servidor, então `/auth/confirm` sempre caía no
+ * fallback `/login?motivo=link_invalido` ("o link me leva de volta pro
+ * login"). Corrigido apontando direto pra `/redefinir-senha` (página de
+ * CLIENTE): o `criarClienteNavegador` (`detectSessionInUrl` ligado por
+ * padrão) lê o fragmento sozinho ao montar e sincroniza a sessão nos
+ * cookies. Ver `GuardaRecuperacao`.
  */
 export async function solicitarRecuperacao(
   _estadoAnterior: EstadoRecuperacao,
@@ -139,7 +135,7 @@ export async function solicitarRecuperacao(
   const origem = await origemDaRequisicao();
 
   const { error } = await supabase.auth.resetPasswordForEmail(analise.data.email, {
-    redirectTo: `${origem}/auth/confirm?next=/redefinir-senha`,
+    redirectTo: `${origem}/redefinir-senha`,
   });
 
   if (error) {
@@ -151,7 +147,9 @@ export async function solicitarRecuperacao(
 
 /**
  * Define a nova senha do usuário. Só funciona com uma sessão de recuperação
- * ativa (criada por /auth/confirm ao abrir o link do e-mail).
+ * ativa — estabelecida no navegador por `GuardaRecuperacao` ao abrir
+ * `/redefinir-senha` a partir do link do e-mail (ver comentário acima em
+ * `solicitarRecuperacao`).
  */
 export async function redefinirSenha(
   _estadoAnterior: EstadoNovaSenha,

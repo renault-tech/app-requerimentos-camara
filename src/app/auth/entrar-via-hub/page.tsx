@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import { MolduraAuth } from "@/components/auth/moldura-auth";
 import { EntradaViaHub } from "@/components/auth/entrada-via-hub";
@@ -16,7 +17,9 @@ export default function PaginaEntrarViaHub() {
       titulo="Entrando pela Central Cataguases"
       subtitulo="Aguarde um instante, você já está sendo autenticado"
     >
-      <EntradaViaHub />
+      <Suspense fallback={<p className="text-center text-sm text-slate-400">Entrando…</p>}>
+        <EntradaViaHub />
+      </Suspense>
     </MolduraAuth>
   );
 }

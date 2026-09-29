@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { MolduraAuth } from "@/components/auth/moldura-auth";
 import { FormularioLogin } from "@/components/login-form";
+import { destinoSeguro } from "@/lib/seguranca/destino-seguro";
 import { criarClienteHub } from "@/lib/supabase/hub-cliente";
 
 const URL_CENTRAL_CATAGUASES = "https://centraltech-liard.vercel.app";
@@ -23,8 +25,25 @@ const MENSAGENS: Record<string, string> = {
 export default async function PaginaLogin({
   searchParams,
 }: {
-  searchParams: Promise<{ motivo?: string }>;
+  searchParams: Promise<{ motivo?: string; proximo?: string; ssoFalhou?: string }>;
 }) {
+  const sp = await searchParams;
+
+  // Login unificado pelo Hub (pedido do usuário): antes de mostrar o
+  // formulário deste app, tenta a checagem silenciosa — se a pessoa já
+  // está autenticada no Hub (mesmo tendo entrado direto pela URL do
+  // Requerimentos, sem passar por lá) e tem acesso a este módulo, ela
+  // entra sem digitar senha nenhuma. `ssoFalhou=1` é o guarda de loop (a
+  // própria rota do Hub devolve pra cá com essa flag quando não dá pra
+  // completar o SSO); `motivo` sinaliza que o SERVIDOR já tem algo
+  // específico pra mostrar aqui (conta desativada, link expirado, senha
+  // redefinida) — nesses casos mostrar a mensagem importa mais do que
+  // tentar de novo. Mesmo mecanismo do App-Compras.
+  if (!sp.motivo && sp.ssoFalhou !== "1") {
+    const destino = destinoSeguro(sp.proximo, "/dashboard");
+    redirect(`${URL_CENTRAL_CATAGUASES}/sso/silencioso?app=requerimentos&proximo=${encodeURIComponent(destino)}`);
+  }
+
   const bloqueado = await loginDiretoBloqueado();
 
   return (
