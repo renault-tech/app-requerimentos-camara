@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function PaginaConfiguracoes() {
   const usuario = await obterUsuarioAtual();
-  if (!usuario) redirect("/login");
+  if (!usuario) redirect("/login?ssoFalhou=1");
   if (usuario.perfil !== "admin" && usuario.perfil !== "diretor") {
     redirect("/dashboard");
   }

@@ -11,7 +11,15 @@ import { URL_HUB } from "@/lib/hub/url";
 export default async function LayoutProtegido({ children }: { children: React.ReactNode }) {
   const usuario = await obterUsuarioAtual();
   if (!usuario) {
-    redirect("/login");
+    // ssoFalhou=1 é essencial: sem ele, /login tenta o SSO silencioso de
+    // novo na hora — se a sessão do SSO não "pegar" neste layout (ex.:
+    // cookie do Supabase ainda não sincronizado no momento do redirect), o
+    // resultado é um loop infinito de magic link sem nunca mostrar o
+    // formulário de login normal. Mesmo bug real encontrado em App-Compras
+    // (usuário odomarribeiro@gmail.com, 30/09/2026) — corrigido aqui também
+    // por ter exatamente o mesmo padrão de SSO. Mesmo guard já usado em
+    // `sair()`.
+    redirect("/login?ssoFalhou=1");
   }
   if (!usuario.ativo) {
     redirect("/login?motivo=desativado");

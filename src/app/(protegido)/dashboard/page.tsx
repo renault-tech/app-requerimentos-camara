@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function PaginaDashboard() {
   const usuario = await obterUsuarioAtual();
-  if (!usuario) redirect("/login");
+  if (!usuario) redirect("/login?ssoFalhou=1");
 
   const [requerimentos, secretarias, vereadores, config, gabinete] = await Promise.all([
     listarRequerimentos(),
