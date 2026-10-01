@@ -1,8 +1,11 @@
 "use client";
 
 import * as React from "react";
+import { Plus, Search } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { URL_HUB } from "@/lib/hub/url";
 import { useAcao } from "@/lib/hooks/usar-acao";
 import { ESTILO_CAMPO_PADRAO as ESTILO_CAMPO } from "@/lib/utils";
 import {
@@ -21,43 +24,53 @@ import type { ConfigPrazo, PerfilUsuario, Secretaria, Vereador } from "@/types/d
 
 const PERFIS: PerfilUsuario[] = ["admin", "diretor", "gabinete", "secretaria"];
 
-export function PainelConfiguracoes({
-  config,
-  secretarias,
-  vereadores,
-  usuarios,
-  souAdmin,
-}: {
-  config: ConfigPrazo;
-  secretarias: Secretaria[];
-  vereadores: Vereador[];
-  usuarios: UsuarioComAcesso[];
-  souAdmin: boolean;
-}) {
+/**
+ * Antes um único `PainelConfiguracoes` empilhava Prazo, Secretarias,
+ * Vereadores e Usuários numa página só — para ver os usuários era preciso
+ * rolar tudo. Agora cada área é uma sub-rota (índice em cards + abas, o
+ * mesmo padrão do Hub e do Compras) e este arquivo só exporta uma seção
+ * por área.
+ */
+export function PainelPrazo({ config }: { config: ConfigPrazo }) {
+  return <SecaoPrazo config={config} />;
+}
+
+export function PainelSecretarias({ secretarias }: { secretarias: Secretaria[] }) {
   return (
-    <div className="mt-5 space-y-6">
-      <SecaoPrazo config={config} />
-      <SecaoCatalogo
-        titulo="Secretarias"
-        descricao="Catálogo usado para distribuir requerimentos. Renomeie ao mudar o nome oficial de uma secretaria, ou desative uma extinta/fundida — nada é apagado, o histórico continua mostrando o nome normalmente."
-        rotuloNovo="Nova secretaria"
-        placeholderNovo="Ex.: Obras"
-        itens={secretarias}
-        onCriar={(nome) => criarSecretaria({ nome })}
-        onAtualizar={(id, dados) => atualizarSecretaria(id, dados)}
-      />
-      <SecaoCatalogo
-        titulo="Vereadores"
-        descricao="Alimenta a lista suspensa do campo Vereador ao cadastrar um requerimento. Desative ao fim do mandato/afastamento — o cadastro sempre permite digitar um nome fora da lista (suplente, nome novo) via a opção Outro."
-        rotuloNovo="Novo vereador"
-        placeholderNovo="Ex.: Fulano de Tal"
-        itens={vereadores}
-        onCriar={(nome) => criarVereador({ nome })}
-        onAtualizar={(id, dados) => atualizarVereador(id, dados)}
-      />
-      {souAdmin && <SecaoUsuarios usuarios={usuarios} secretarias={secretarias} />}
-    </div>
+    <SecaoCatalogo
+      titulo="Secretarias"
+      descricao="Catálogo usado para distribuir requerimentos. Renomeie ao mudar o nome oficial de uma secretaria, ou desative uma extinta/fundida — nada é apagado, o histórico continua mostrando o nome normalmente."
+      rotuloNovo="Nova secretaria"
+      placeholderNovo="Ex.: Obras"
+      itens={secretarias}
+      onCriar={(nome) => criarSecretaria({ nome })}
+      onAtualizar={(id, dados) => atualizarSecretaria(id, dados)}
+    />
   );
+}
+
+export function PainelVereadores({ vereadores }: { vereadores: Vereador[] }) {
+  return (
+    <SecaoCatalogo
+      titulo="Vereadores"
+      descricao="Alimenta a lista suspensa do campo Vereador ao cadastrar um requerimento. Desative ao fim do mandato/afastamento — o cadastro sempre permite digitar um nome fora da lista (suplente, nome novo) via a opção Outro."
+      rotuloNovo="Novo vereador"
+      placeholderNovo="Ex.: Fulano de Tal"
+      itens={vereadores}
+      onCriar={(nome) => criarVereador({ nome })}
+      onAtualizar={(id, dados) => atualizarVereador(id, dados)}
+    />
+  );
+}
+
+export function PainelUsuarios({
+  usuarios,
+  secretarias,
+}: {
+  usuarios: UsuarioComAcesso[];
+  secretarias: Secretaria[];
+}) {
+  return <SecaoUsuarios usuarios={usuarios} secretarias={secretarias} />;
 }
 
 function Cartao({ titulo, descricao, children }: { titulo: string; descricao?: string; children: React.ReactNode }) {
@@ -266,6 +279,10 @@ function LinhaCatalogoEdicao({
   );
 }
 
+function normalizar(texto: string): string {
+  return texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
 function SecaoUsuarios({
   usuarios,
   secretarias,
@@ -273,32 +290,72 @@ function SecaoUsuarios({
   usuarios: UsuarioComAcesso[];
   secretarias: Secretaria[];
 }) {
-  // Bug real (mesmo relatado e corrigido no Hub): o formulário de edição
-  // usava um único estado compartilhado por toda a tabela e sempre
-  // renderizava ABAIXO dela inteira — clicar em "Editar" numa das
-  // primeiras linhas de uma tabela longa mudava o estado corretamente,
-  // mas o formulário abria fora da área visível, parecendo não fazer
-  // nada. Corrigido abrindo o formulário dentro da própria linha (mesmo
-  // padrão já usado em `SecaoCatalogo`/`LinhaCatalogoEdicao` neste mesmo
-  // arquivo, e no App-Compras para Processos/Contratos).
+  // O formulário de edição abre dentro da própria linha (bug real já
+  // corrigido antes: abrir abaixo da tabela inteira parecia que o clique
+  // não fazia nada).
   const [editandoId, setEditandoId] = React.useState<string | null>(null);
-  const [criandoNovo, setCriandoNovo] = React.useState(false);
+  const [busca, setBusca] = React.useState("");
+
+  const itens = React.useMemo(() => {
+    const termo = normalizar(busca.trim());
+    if (!termo) return usuarios;
+    return usuarios.filter((u) => {
+      const secretaria = secretarias.find((s) => s.id === u.secretariaId)?.nome ?? "";
+      const alvo = normalizar(
+        [u.nome, u.email, RUTULO_PERFIL[u.perfil], secretaria, u.ativo ? "ativo" : "inativo"].join(" ")
+      );
+      return termo.split(/\s+/).every((parte) => alvo.includes(parte));
+    });
+  }, [usuarios, secretarias, busca]);
 
   function alternarEdicao(id: string) {
-    setCriandoNovo(false);
     setEditandoId((atual) => (atual === id ? null : id));
   }
 
   return (
     <Cartao
       titulo="Usuários com acesso"
-      descricao="A pessoa precisa já ter login em algum módulo da plataforma — aqui só se libera o acesso a este."
+      descricao="Quem entra neste módulo é liberado pela Central Cataguases (Hub), que cria a conta e o cadastro de uma vez. Aqui se ajusta o que cada pessoa faz dentro dele: perfil, secretaria, gabinete e se está ativa."
     >
-      <div className="overflow-x-auto">
+      {/* Barra no topo: busca + "Conceder acesso". Conceder leva ao Hub —
+          o acesso é gerenciado lá, sem um segundo formulário aqui (o que
+          o Hub gerencia não se repete dentro dos apps). */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search
+            className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+            aria-hidden
+          />
+          <input
+            type="search"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar por nome, e-mail, perfil ou secretaria"
+            aria-label="Buscar usuário"
+            className={`${ESTILO_CAMPO} w-full pl-8`}
+          />
+        </div>
+        <a
+          href={`${URL_HUB}/configuracoes/usuarios?novo=1`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={cn(buttonVariants({ size: "sm" }), "shrink-0")}
+          title="Abre a Central Cataguases, onde o acesso é concedido"
+        >
+          <Plus aria-hidden />
+          Conceder acesso
+        </a>
+      </div>
+
+      <p className="mt-3 text-xs text-slate-400" aria-live="polite">
+        {busca.trim() ? `${itens.length} de ${usuarios.length} usuários` : `${usuarios.length} usuários`}
+      </p>
+
+      <div className="mt-1 max-h-[65vh] overflow-auto rounded-md border border-slate-100">
         <table className="w-full min-w-[560px] text-sm">
-          <thead>
+          <thead className="sticky top-0 z-10 bg-white">
             <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
-              <th className="py-1.5 pr-3 font-medium">Nome</th>
+              <th className="py-1.5 pl-2 pr-3 font-medium">Nome</th>
               <th className="py-1.5 pr-3 font-medium">E-mail</th>
               <th className="py-1.5 pr-3 font-medium">Perfil</th>
               <th className="py-1.5 pr-3 font-medium">Secretaria</th>
@@ -308,7 +365,7 @@ function SecaoUsuarios({
             </tr>
           </thead>
           <tbody>
-            {usuarios.map((u) => {
+            {itens.map((u) => {
               const aberto = editandoId === u.id;
               return (
                 <React.Fragment key={u.id}>
@@ -332,26 +389,18 @@ function SecaoUsuarios({
                 </React.Fragment>
               );
             })}
-            {usuarios.length === 0 && (
+            {itens.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-4 text-center text-xs text-slate-400">
-                  Nenhum usuário com acesso ainda.
+                <td colSpan={7} className="py-6 text-center text-xs text-slate-400">
+                  {usuarios.length === 0
+                    ? "Nenhum usuário com acesso ainda."
+                    : "Nenhum usuário encontrado para essa busca."}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
-
-      {!criandoNovo ? (
-        <Button size="sm" className="mt-3" onClick={() => { setEditandoId(null); setCriandoNovo(true); }}>
-          Conceder acesso
-        </Button>
-      ) : (
-        <div className="mt-3">
-          <FormularioAcesso secretarias={secretarias} usuario={null} onFechar={() => setCriandoNovo(false)} />
-        </div>
-      )}
     </Cartao>
   );
 }
@@ -372,7 +421,7 @@ function LinhaUsuario({
 
   return (
     <tr className="border-b border-slate-100 last:border-0">
-      <td className="py-1.5 pr-3">{usuario.nome}</td>
+      <td className="py-1.5 pl-2 pr-3">{usuario.nome}</td>
       <td className="py-1.5 pr-3 text-slate-500">{usuario.email}</td>
       <td className="py-1.5 pr-3">{RUTULO_PERFIL[usuario.perfil]}</td>
       <td className="py-1.5 pr-3">{usuario.perfil === "secretaria" ? nomeSecretaria : "—"}</td>
@@ -409,28 +458,28 @@ function FormularioAcesso({
   onFechar,
 }: {
   secretarias: Secretaria[];
-  usuario: UsuarioComAcesso | null;
+  usuario: UsuarioComAcesso;
   onFechar: () => void;
 }) {
   const acao = useAcao();
-  const [email, setEmail] = React.useState(usuario?.email ?? "");
-  const [nome, setNome] = React.useState(usuario?.nome ?? "");
-  const [perfil, setPerfil] = React.useState<PerfilUsuario>(usuario?.perfil ?? "secretaria");
-  const [secretariaId, setSecretariaId] = React.useState<string | null>(usuario?.secretariaId ?? null);
-  const [ativo, setAtivo] = React.useState(usuario?.ativo ?? true);
+  const [email, setEmail] = React.useState(usuario.email);
+  const [nome, setNome] = React.useState(usuario.nome);
+  const [perfil, setPerfil] = React.useState<PerfilUsuario>(usuario.perfil);
+  const [secretariaId, setSecretariaId] = React.useState<string | null>(usuario.secretariaId);
+  const [ativo, setAtivo] = React.useState(usuario.ativo);
 
   return (
     <div className="rounded-md border border-slate-200 bg-white p-3">
       <p className="text-xs font-medium text-slate-600">
-        {usuario ? `Editando acesso de ${usuario.nome}` : "Conceder novo acesso"}
+        Editando {usuario.nome}
       </p>
       <div className="mt-2 grid gap-2 sm:grid-cols-2">
         <div>
-          <label className="text-xs text-slate-500">E-mail (já cadastrado na plataforma)</label>
+          <label className="text-xs text-slate-500">E-mail</label>
           <input
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            disabled={!!usuario}
+            disabled
             className={`${ESTILO_CAMPO} mt-1 w-full disabled:bg-slate-100`}
           />
         </div>
