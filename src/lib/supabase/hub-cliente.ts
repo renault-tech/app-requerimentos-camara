@@ -16,3 +16,14 @@ export function criarClienteHub() {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }
+
+/** Mesmo cliente do schema `hub`, mas com o token de uma sessão já
+ * autenticada — para gravar/ler o próprio feedback (`hub.feedback`). */
+export function criarClienteHubComSessao(accessToken: string) {
+  const env = envPublico();
+  return createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
+    db: { schema: "hub" },
+    auth: { autoRefreshToken: false, persistSession: false },
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+  });
+}

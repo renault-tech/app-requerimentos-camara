@@ -7,6 +7,7 @@ import { Brasao } from "@/components/brasao";
 import { sair } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { URL_HUB } from "@/lib/hub/url";
+import { BotaoFeedback } from "@/components/feedback/botao-feedback";
 
 export default async function LayoutProtegido({ children }: { children: React.ReactNode }) {
   const usuario = await obterUsuarioAtual();
@@ -64,6 +65,7 @@ export default async function LayoutProtegido({ children }: { children: React.Re
               Configurações
             </Link>
           )}
+          <BotaoFeedback />
           <span className="ml-2 hidden text-xs text-slate-400 sm:inline">
             {usuario.nome} · {RUTULO_PERFIL[usuario.perfil]}
             {gabinete && usuario.perfil === "secretaria" ? " (gabinete)" : ""}
