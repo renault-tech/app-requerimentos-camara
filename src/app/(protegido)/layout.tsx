@@ -31,7 +31,7 @@ export default async function LayoutProtegido({ children }: { children: React.Re
 
   return (
     <div className="min-h-dvh bg-slate-50">
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-cataguases-marinho px-4 py-3 text-white sm:px-6">
+      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-t-[3px] border-b-slate-200 border-t-[#C63B22] bg-cataguases-marinho px-4 py-3 text-white sm:px-6">
         <Link href="/dashboard" className="flex items-center gap-3 transition-opacity hover:opacity-85">
           <Brasao tamanho={32} />
           <div>
