@@ -89,6 +89,7 @@ export function PainelRequerimentos({
   config,
   usuario,
   podeDistribuir,
+  abrirId,
 }: {
   requerimentosIniciais: RequerimentoDaLista[];
   secretarias: Secretaria[];
@@ -96,10 +97,15 @@ export function PainelRequerimentos({
   config: ConfigPrazo;
   usuario: Usuario;
   podeDistribuir: boolean;
+  /** Requerimento a abrir já expandido (link de um aviso). */
+  abrirId?: string;
 }) {
   const [busca, setBusca] = React.useState("");
   const [filtro, setFiltro] = React.useState<FiltroCartao>("todos");
-  const [linhaExpandida, setLinhaExpandida] = React.useState<string | null>(null);
+  const [linhaExpandida, setLinhaExpandida] = React.useState<string | null>(abrirId ?? null);
+  React.useEffect(() => {
+    if (abrirId) document.getElementById(`req-${abrirId}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [abrirId]);
   const [modalNovoAberto, setModalNovoAberto] = React.useState(false);
   const [exportarAberto, setExportarAberto] = React.useState(false);
   const [mostrarMaisFiltros, setMostrarMaisFiltros] = React.useState(false);
@@ -393,6 +399,7 @@ export function PainelRequerimentos({
               return (
                 <React.Fragment key={r.id}>
                   <tr
+                    id={`req-${r.id}`}
                     role="button"
                     tabIndex={0}
                     onClick={() => setLinhaExpandida(expandida ? null : r.id)}
@@ -417,15 +424,26 @@ export function PainelRequerimentos({
                           <span className="text-xs text-slate-400">—</span>
                         )}
                         {r.secretarias.map((s) => (
+                          // Três estados à vista do Gabinete: aguardando ciência,
+                          // ciente (deu ciência, ainda não respondeu) e respondida.
                           <span
                             key={s.id}
+                            title={
+                              s.respondidaEm
+                                ? `Respondida em ${s.respondidaEm.split("-").reverse().join("/")}`
+                                : s.cienciaEm
+                                  ? `Ciência em ${s.cienciaEm.split("-").reverse().join("/")} — aguardando resposta`
+                                  : "Aguardando ciência"
+                            }
                             className={`rounded-full border px-2 py-0.5 text-[11px] ${
                               s.respondidaEm
                                 ? "border-semaforo-verde/40 bg-semaforo-verde/10 text-green-800"
-                                : "border-slate-300 bg-slate-100 text-slate-600"
+                                : s.cienciaEm
+                                  ? "border-sky-300 bg-sky-50 text-sky-900"
+                                  : "border-dashed border-slate-300 bg-slate-100 text-slate-600"
                             }`}
                           >
-                            {s.respondidaEm ? "✓ " : ""}
+                            {s.respondidaEm ? "✓ " : s.cienciaEm ? "◉ " : "○ "}
                             {s.nomeSecretaria}
                           </span>
                         ))}
