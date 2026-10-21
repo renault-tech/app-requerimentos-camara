@@ -8,6 +8,7 @@ import { sair } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { URL_HUB } from "@/lib/hub/url";
 import { BotaoFeedback } from "@/components/feedback/botao-feedback";
+import { SinoRequerimentos } from "@/components/notificacoes/sino";
 
 export default async function LayoutProtegido({ children }: { children: React.ReactNode }) {
   const usuario = await obterUsuarioAtual();
@@ -65,6 +66,7 @@ export default async function LayoutProtegido({ children }: { children: React.Re
               Configurações
             </Link>
           )}
+          <SinoRequerimentos usuarioId={usuario.id} />
           <BotaoFeedback />
           <span className="ml-2 hidden text-xs text-slate-400 sm:inline">
             {usuario.nome} · {RUTULO_PERFIL[usuario.perfil]}

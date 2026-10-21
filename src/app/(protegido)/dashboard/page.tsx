@@ -7,7 +7,10 @@ import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 
 export const dynamic = "force-dynamic";
 
-export default async function PaginaDashboard() {
+export default async function PaginaDashboard({ searchParams }: { searchParams: Promise<{ req?: string }> }) {
+  const { req } = await searchParams;
+  // `?req=<id>`: vindo de um aviso — abre direto o requerimento.
+  const abrirId = req && /^[0-9a-f-]{36}$/i.test(req) ? req : undefined;
   const usuario = await obterUsuarioAtual();
   if (!usuario) redirect("/login?ssoFalhou=1");
 
@@ -28,6 +31,8 @@ export default async function PaginaDashboard() {
       />
 
       <PainelRequerimentos
+        key={abrirId ?? "lista"}
+        abrirId={abrirId}
         requerimentosIniciais={requerimentos}
         secretarias={secretarias}
         vereadores={vereadores}
