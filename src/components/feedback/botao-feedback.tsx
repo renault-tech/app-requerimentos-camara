@@ -48,6 +48,18 @@ export function BotaoFeedback() {
   const [aba, setAba] = React.useState<"enviar" | "meus">("enviar");
   const [envios, setEnvios] = React.useState<EnvioFeedback[] | null>(null);
 
+  // Aviso de mudança de status (sino) → abre direto em "Meus envios".
+  React.useEffect(() => {
+    function abrirDoAviso() {
+      setAberto(true);
+      setAba("meus");
+      setEnvios(null);
+      void meusEnvios().then(setEnvios);
+    }
+    window.addEventListener("abrir-feedback-meus", abrirDoAviso);
+    return () => window.removeEventListener("abrir-feedback-meus", abrirDoAviso);
+  }, []);
+
   async function abrirMeus() {
     setAba("meus");
     setEnvios(null);

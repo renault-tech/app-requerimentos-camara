@@ -99,6 +99,7 @@ export function SinoRequerimentos({ usuarioId }: { usuarioId: string }) {
     void marcar([n.id]);
     setAberto(false);
     setNovo(null);
+    if (n.tipo === "feedback_status") window.dispatchEvent(new CustomEvent("abrir-feedback-meus"));
     if (n.link) router.push(n.link);
   }
 
