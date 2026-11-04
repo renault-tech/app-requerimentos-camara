@@ -7,6 +7,11 @@
    Semáforo: azul #378ADD, verde #639922, amarelo #EF9F27, vermelho #E24B4A. */
 
 @layer base {
+  /* Cabeçalho escuro (padrão da Central): anel de foco dourado, visível sobre o marinho. */
+  .cabecalho-escuro :where(a, button, summary, [role="button"], [role="menuitem"]):focus-visible {
+    outline: 2px solid #E9A63B;
+    outline-offset: 2px;
+  }
   :root {
     --background: 0 0% 100%;
     --foreground: 214 62% 12%;

@@ -1,5 +1,6 @@
 "use client";
 
+import { CLASSE_ICONE_CABECALHO } from "@/components/layout/cabecalho-estilos";
 import * as React from "react";
 import { usePathname } from "next/navigation";
 import { Megaphone, Paperclip, X } from "lucide-react";
@@ -167,7 +168,7 @@ export function BotaoFeedback() {
         aria-label="Enviar feedback"
         title="Enviar feedback"
         onClick={() => setAberto(true)}
-        className="flex h-9 w-9 items-center justify-center rounded-md text-slate-200 transition-colors hover:bg-white/10 hover:text-white"
+        className={CLASSE_ICONE_CABECALHO}
       >
         <Megaphone className="h-5 w-5" aria-hidden strokeWidth={1.8} />
       </button>
