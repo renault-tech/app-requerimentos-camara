@@ -124,7 +124,7 @@ export function SinoRequerimentos({ usuarioId }: { usuarioId: string }) {
       </button>
 
       {aberto && (
-        <div className="absolute right-0 z-50 mt-2 w-[min(92vw,380px)] overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-800 shadow-xl">
+        <div className="tema-atual absolute right-0 z-50 mt-2 w-[min(92vw,380px)] overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-800 shadow-xl">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
             <p className="text-sm font-semibold text-cataguases-marinho">Avisos</p>
             {naoLidas > 0 && (
