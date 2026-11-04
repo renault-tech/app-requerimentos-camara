@@ -595,3 +595,25 @@ html.dark [style*="color: rgb(15, 118, 110)"] { color: #5fd3c8 !important; }
     }
   }
 }
+
+/* ===== Escuro no celular: mais legível (06/11/2026) ===== */
+html.dark body {
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+}
+@media (max-width: 767px) {
+  html.dark {
+    --slate-400: 150 166 192;
+    --slate-500: 168 183 206;
+    --muted-foreground: 212 22% 74%;
+  }
+  html.estilo-apple.dark .bg-white[class*="rounded-xl"],
+  html.estilo-apple.dark .bg-white[class*="rounded-2xl"],
+  html.estilo-apple.dark .bg-white[class*="rounded-[1"] {
+    background-color: rgb(var(--surface) / 0.95);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  html.dark .text-\[10px\] { font-size: 11px; }
+  html.dark .text-\[11px\] { font-size: 12px; }
+}

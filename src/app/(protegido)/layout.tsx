@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 
 import { CabecalhoRequerimentos } from "@/components/layout/cabecalho-requerimentos";
+import { SincronizarPreferencias } from "@/components/layout/sincronizar-preferencias";
+import { lerPreferencias } from "@/lib/dados/preferencias";
 import { obterUsuarioAtual, usuarioAtuaComoGabinete, RUTULO_PERFIL } from "@/lib/auth/perfil";
 
 export default async function LayoutProtegido({ children }: { children: React.ReactNode }) {
@@ -21,10 +23,11 @@ export default async function LayoutProtegido({ children }: { children: React.Re
   }
 
   const podeConfigurar = usuario.perfil === "admin" || usuario.perfil === "diretor";
-  const gabinete = await usuarioAtuaComoGabinete(usuario);
+  const [gabinete, preferencias] = await Promise.all([usuarioAtuaComoGabinete(usuario), lerPreferencias()]);
 
   return (
     <div className="min-h-dvh bg-slate-50">
+      <SincronizarPreferencias salvas={preferencias} />
       <CabecalhoRequerimentos
         usuario={{ id: usuario.id, nome: usuario.nome }}
         detalhe={`${RUTULO_PERFIL[usuario.perfil]}${gabinete && usuario.perfil === "secretaria" ? " (gabinete)" : ""}`}
