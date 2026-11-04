@@ -1,5 +1,6 @@
 "use client";
 
+import { CLASSE_ICONE_CABECALHO } from "@/components/layout/cabecalho-estilos";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Bell, X } from "lucide-react";
@@ -110,7 +111,7 @@ export function SinoRequerimentos({ usuarioId }: { usuarioId: string }) {
       <button
         type="button"
         onClick={() => setAberto((v) => !v)}
-        className="relative inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-200 transition-colors hover:bg-white/10 hover:text-white"
+        className={CLASSE_ICONE_CABECALHO}
         aria-label={naoLidas > 0 ? `Avisos: ${naoLidas} não lido(s)` : "Avisos"}
         aria-expanded={aberto}
       >
