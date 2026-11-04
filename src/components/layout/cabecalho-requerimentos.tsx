@@ -55,12 +55,9 @@ export function CabecalhoRequerimentos({
           <BotaoFeedback />
           <AlternarTema />
           <span aria-hidden className="mx-1 hidden h-6 w-px bg-white/15 sm:block" />
-          <span
-            className="hidden max-w-[14rem] truncate px-2 text-sm text-slate-200 sm:inline"
-            title={`${usuario.nome} · ${detalhe}`}
-          >
-            {usuario.nome}
-          </span>
+          <Link href="/conta" className={`${CLASSE_LINK_CABECALHO} hidden max-w-[14rem] sm:inline-flex`} title={`Minha conta · ${usuario.nome} · ${detalhe}`}>
+            <span className="truncate">{usuario.nome}</span>
+          </Link>
           <form action={sair}>
             <button type="submit" className={CLASSE_LINK_CABECALHO}>
               <LogOut className="h-5 w-5 sm:hidden" aria-hidden strokeWidth={1.8} />
