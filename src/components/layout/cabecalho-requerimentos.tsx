@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, LogOut, Settings } from "lucide-react";
 
 import { Brasao } from "@/components/brasao";
+import { AlternarTema } from "@/components/layout/alternar-tema";
 import { BotaoFeedback } from "@/components/feedback/botao-feedback";
 import { CLASSE_LINK_CABECALHO } from "@/components/layout/cabecalho-estilos";
 import { SinoRequerimentos } from "@/components/notificacoes/sino";
@@ -22,7 +23,7 @@ export function CabecalhoRequerimentos({
   // módulo com a cor dele à esquerda; à direita, nesta ordem: links do app · avisos → feedback ·
   // usuário → Sair. Controles de 40 px (44 px no celular) e foco dourado.
   return (
-    <header className="cabecalho-escuro sticky top-0 z-30 border-b border-t-[3px] border-b-slate-200 border-t-[#C63B22] bg-cataguases-marinho text-white">
+    <header className="cabecalho-escuro tema-fixo sticky top-0 z-30 border-b border-t-[3px] border-b-slate-200 border-t-[#C63B22] bg-cataguases-marinho text-white">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-2 sm:px-6">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <Link href="/dashboard" aria-label="Requerimentos da Câmara, início" className="rounded-lg p-0.5 transition-opacity duration-200 hover:opacity-85">
@@ -52,6 +53,7 @@ export function CabecalhoRequerimentos({
           <span aria-hidden className="mx-1 hidden h-6 w-px bg-white/15 sm:block" />
           <SinoRequerimentos usuarioId={usuario.id} />
           <BotaoFeedback />
+          <AlternarTema />
           <span aria-hidden className="mx-1 hidden h-6 w-px bg-white/15 sm:block" />
           <span
             className="hidden max-w-[14rem] truncate px-2 text-sm text-slate-200 sm:inline"
