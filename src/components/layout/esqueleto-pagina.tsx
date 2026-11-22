@@ -1,19 +1,16 @@
-/** Esqueleto mostrado enquanto uma página dinâmica carrega (`loading.tsx`): a mesma estrutura da lista, sem dados. */
+/** Esqueleto (`loading.tsx`) com a forma da tela de Requerimentos: faixa de números, gráficos à esquerda e a lista ao lado. */
 export function EsqueletoPagina() {
   return (
-    <div className="px-4 sm:px-6" role="status" aria-live="polite" aria-busy="true">
+    <div className="flex flex-col gap-3" role="status" aria-live="polite" aria-busy="true">
       <span className="sr-only">Carregando…</span>
-      <div className="h-24 animate-pulse rounded-2xl bg-slate-200/70" />
-      <div className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-7">
-        {Array.from({ length: 7 }, (_, i) => (
-          <div key={i} className="h-[6.25rem] animate-pulse rounded-2xl bg-slate-200/70" />
-        ))}
-      </div>
-      <div className="mt-4 h-14 animate-pulse rounded-xl bg-slate-200/60" />
-      <div className="mt-4 space-y-2 rounded-lg border border-slate-200 bg-white p-3">
-        {Array.from({ length: 6 }, (_, i) => (
-          <div key={i} className="h-10 animate-pulse rounded bg-slate-100" />
-        ))}
+      <div className="h-7 w-64 max-w-full animate-pulse rounded-lg bg-slate-200" />
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <div className="hidden h-[30rem] animate-pulse rounded-2xl border border-slate-200 bg-slate-100 lg:block" />
+        <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3">
+          {Array.from({ length: 6 }, (_, i) => (
+            <div key={i} className="h-[4.5rem] animate-pulse rounded-lg bg-slate-100" />
+          ))}
+        </div>
       </div>
     </div>
   );

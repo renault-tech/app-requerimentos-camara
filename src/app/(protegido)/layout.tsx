@@ -1,9 +1,20 @@
+import type { CSSProperties } from "react";
 import { redirect } from "next/navigation";
 
 import { CabecalhoRequerimentos } from "@/components/layout/cabecalho-requerimentos";
+import { AjusteDeRolagem } from "@/components/modulo/ajuste-de-rolagem";
+import { AvisoConexao } from "@/components/modulo/estados-tela";
 import { SincronizarPreferencias } from "@/components/layout/sincronizar-preferencias";
 import { lerPreferencias } from "@/lib/dados/preferencias";
 import { obterUsuarioAtual, usuarioAtuaComoGabinete, RUTULO_PERFIL } from "@/lib/auth/perfil";
+
+/** Cor do módulo (vermelho do Requerimentos) para os componentes compartilhados: faixa, botões, realces e seleção. */
+const ESTILO_MODULO = {
+  "--modulo": "#C63B22",
+  "--modulo-texto": "#C63B22",
+  "--modulo-tinta": "#C63B22",
+  "--modulo-tinta-escuro": "#FF8A7A",
+} as CSSProperties;
 
 export default async function LayoutProtegido({ children }: { children: React.ReactNode }) {
   // As preferências de aparência não dependem de quem é a pessoa: começam já, junto com a leitura do perfil.
@@ -28,14 +39,20 @@ export default async function LayoutProtegido({ children }: { children: React.Re
   const [gabinete, preferencias] = await Promise.all([usuarioAtuaComoGabinete(usuario), preferenciasPronto]);
 
   return (
-    <div className="min-h-dvh bg-slate-50">
+    <div className="emd min-h-dvh bg-slate-50 print:bg-white" style={ESTILO_MODULO}>
       <SincronizarPreferencias salvas={preferencias} />
       <CabecalhoRequerimentos
         usuario={{ id: usuario.id, nome: usuario.nome }}
         detalhe={`${RUTULO_PERFIL[usuario.perfil]}${gabinete && usuario.perfil === "secretaria" ? " (gabinete)" : ""}`}
         podeConfigurar={podeConfigurar}
       />
-      <main id="conteudo" className="mx-auto max-w-[min(94%,1400px)] py-6">{children}</main>
+      <div className="mx-auto max-w-[110rem] px-3 py-4 sm:px-5 sm:py-5 print:max-w-none print:p-0">
+        <main id="conteudo" className="min-w-0">
+          <AjusteDeRolagem />
+          <AvisoConexao />
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

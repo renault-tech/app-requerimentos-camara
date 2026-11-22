@@ -2,15 +2,15 @@ import { redirect } from "next/navigation";
 
 import { listarRequerimentos, listarSecretarias, listarVereadores, obterConfigPrazo } from "@/lib/dados/requerimentos";
 import { obterUsuarioAtual, usuarioAtuaComoGabinete } from "@/lib/auth/perfil";
-import { PainelRequerimentos } from "@/components/requerimentos/painel-requerimentos";
-import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
+import { AreaRequerimentos } from "@/components/requerimentos/area-requerimentos";
+import { montarLinhas } from "@/lib/requerimentos/area-trabalho";
 
 export const dynamic = "force-dynamic";
 
 export default async function PaginaDashboard({ searchParams }: { searchParams: Promise<{ req?: string }> }) {
   const { req } = await searchParams;
-  // `?req=<id>`: vindo de um aviso — abre direto o requerimento.
-  const abrirId = req && /^[0-9a-f-]{36}$/i.test(req) ? req : undefined;
+  // `?req=<id>`: link dos avisos de antes. A tela agora guarda o requerimento aberto em `?e=<id>`.
+  if (req && /^[0-9a-f-]{36}$/i.test(req)) redirect(`/dashboard?e=${req}`);
   const usuario = await obterUsuarioAtual();
   if (!usuario) redirect("/login?ssoFalhou=1");
 
@@ -23,23 +23,13 @@ export default async function PaginaDashboard({ searchParams }: { searchParams: 
   ]);
 
   return (
-    <div className="px-4 sm:px-6">
-      <CabecalhoPagina
-        titulo="Requerimentos da Câmara"
-        subtitulo="Recebidos da Câmara Municipal, distribuídos às secretarias e devolvidos após resposta."
-        tamanho="grande"
-      />
-
-      <PainelRequerimentos
-        key={abrirId ?? "lista"}
-        abrirId={abrirId}
-        requerimentosIniciais={requerimentos}
-        secretarias={secretarias}
-        vereadores={vereadores}
-        config={config}
-        usuario={usuario}
-        podeDistribuir={gabinete}
-      />
-    </div>
+    <AreaRequerimentos
+      linhas={montarLinhas(requerimentos)}
+      secretarias={secretarias}
+      vereadores={vereadores}
+      config={config}
+      usuario={usuario}
+      podeDistribuir={gabinete}
+    />
   );
 }
