@@ -15,7 +15,8 @@ function traduzirErro(mensagem: string | undefined): string {
 }
 
 function revalidar() {
-  revalidatePath("/configuracoes");
+  // "layout": todas as sub-telas de Configurações (usuários, secretarias…) — o `router.refresh()` extra deixou de existir.
+  revalidatePath("/configuracoes", "layout");
 }
 
 const esquemaPrazo = z.object({

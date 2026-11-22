@@ -6,6 +6,8 @@ import { lerPreferencias } from "@/lib/dados/preferencias";
 import { obterUsuarioAtual, usuarioAtuaComoGabinete, RUTULO_PERFIL } from "@/lib/auth/perfil";
 
 export default async function LayoutProtegido({ children }: { children: React.ReactNode }) {
+  // As preferências de aparência não dependem de quem é a pessoa: começam já, junto com a leitura do perfil.
+  const preferenciasPronto = lerPreferencias();
   const usuario = await obterUsuarioAtual();
   if (!usuario) {
     // ssoFalhou=1 é essencial: sem ele, /login tenta o SSO silencioso de
@@ -23,7 +25,7 @@ export default async function LayoutProtegido({ children }: { children: React.Re
   }
 
   const podeConfigurar = usuario.perfil === "admin" || usuario.perfil === "diretor";
-  const [gabinete, preferencias] = await Promise.all([usuarioAtuaComoGabinete(usuario), lerPreferencias()]);
+  const [gabinete, preferencias] = await Promise.all([usuarioAtuaComoGabinete(usuario), preferenciasPronto]);
 
   return (
     <div className="min-h-dvh bg-slate-50">

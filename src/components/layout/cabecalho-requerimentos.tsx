@@ -4,6 +4,7 @@ import { ArrowLeft, LogOut, Settings } from "lucide-react";
 import { Brasao } from "@/components/brasao";
 import { AlternarTema } from "@/components/layout/alternar-tema";
 import { BotaoFeedback } from "@/components/feedback/botao-feedback";
+import { MarcaPendente } from "@/components/layout/marca-pendente";
 import { CLASSE_LINK_CABECALHO } from "@/components/layout/cabecalho-estilos";
 import { SinoRequerimentos } from "@/components/notificacoes/sino";
 import { sair } from "@/lib/actions/auth";
@@ -43,11 +44,13 @@ export function CabecalhoRequerimentos({
         <nav aria-label="Seções, avisos e conta" className="flex flex-wrap items-center justify-end gap-0.5 sm:gap-1">
           <Link href="/dashboard" className={CLASSE_LINK_CABECALHO}>
             Início
+            <MarcaPendente />
           </Link>
           {podeConfigurar && (
             <Link href="/configuracoes" className={CLASSE_LINK_CABECALHO}>
               <Settings className="h-5 w-5 md:hidden" aria-hidden strokeWidth={1.8} />
               <span className="sr-only md:not-sr-only">Configurações</span>
+              <MarcaPendente />
             </Link>
           )}
           <span aria-hidden className="mx-1 hidden h-6 w-px bg-white/15 sm:block" />

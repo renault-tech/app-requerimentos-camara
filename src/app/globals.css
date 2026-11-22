@@ -617,3 +617,9 @@ html.dark body {
   html.dark .text-\[10px\] { font-size: 11px; }
   html.dark .text-\[11px\] { font-size: 12px; }
 }
+
+/* Clique respondido na hora: o item do cabeçalho cuja tela ainda está chegando acende e mostra um ponto pulsando (`MarcaPendente`). */
+.cabecalho-escuro a:has([data-pendente]) { background: rgb(255 255 255 / 0.12); color: #fff; }
+[data-pendente] { animation: pendente-pulso 0.8s ease-in-out infinite alternate; }
+@keyframes pendente-pulso { from { opacity: 0.35; transform: scale(0.8); } to { opacity: 1; transform: scale(1.15); } }
+@media (prefers-reduced-motion: reduce) { [data-pendente] { animation: none; } }

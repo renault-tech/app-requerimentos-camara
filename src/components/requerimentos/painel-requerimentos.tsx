@@ -115,6 +115,9 @@ export function PainelRequerimentos({
   const [dataFim, setDataFim] = React.useState("");
 
   const requerimentos = requerimentosIniciais;
+  // A digitação não espera a lista refiltrar: o campo responde na hora e a lista acompanha logo atrás.
+  const buscaAdiada = React.useDeferredValue(busca);
+  const vereadorAdiado = React.useDeferredValue(vereadorFiltro);
 
   const contagens = React.useMemo(() => {
     return {
@@ -136,14 +139,14 @@ export function PainelRequerimentos({
     if (secretariaFiltro) {
       base = base.filter((r) => r.secretarias.some((s) => s.secretariaId === secretariaFiltro));
     }
-    if (vereadorFiltro.trim()) {
-      const v = vereadorFiltro.trim().toLowerCase();
+    if (vereadorAdiado.trim()) {
+      const v = vereadorAdiado.trim().toLowerCase();
       base = base.filter((r) => r.vereador.toLowerCase().includes(v));
     }
     if (dataInicio) base = base.filter((r) => r.recebidoEm >= dataInicio);
     if (dataFim) base = base.filter((r) => r.recebidoEm <= dataFim);
 
-    const termo = busca.trim().toLowerCase();
+    const termo = buscaAdiada.trim().toLowerCase();
     if (!termo) return base;
     return base.filter(
       (r) =>
@@ -151,7 +154,7 @@ export function PainelRequerimentos({
         r.vereador.toLowerCase().includes(termo) ||
         r.assunto.toLowerCase().includes(termo)
     );
-  }, [requerimentos, filtro, busca, secretariaFiltro, vereadorFiltro, dataInicio, dataFim]);
+  }, [requerimentos, filtro, buscaAdiada, secretariaFiltro, vereadorAdiado, dataInicio, dataFim]);
 
   function limparMaisFiltros() {
     setSecretariaFiltro("");
