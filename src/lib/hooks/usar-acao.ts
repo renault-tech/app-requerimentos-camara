@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
 
 /**
  * Forma mínima que toda `Resultado*` deste projeto já segue (discriminated
@@ -14,14 +13,13 @@ type ResultadoAcao = { sucesso: boolean; erro?: string; aviso?: string };
 
 /**
  * Estado + execução de uma server action que devolve `Resultado*`
- * (`{ sucesso, erro? }`, com `aviso?` opcional) — pendente/erro/aviso e
- * `router.refresh()` no sucesso. Eram 6 cópias idênticas espalhadas por
+ * (`{ sucesso, erro? }`, com `aviso?` opcional) — pendente/erro/aviso. Não chama `router.refresh()`:
+ * toda action deste projeto já revalida o caminho, e a resposta da Server Action traz a tela nova (o refresh extra refazia a página inteira). Eram 6 cópias idênticas espalhadas por
  * `acoes-ciclo.tsx`, `editar-processo.tsx`, `gerenciador-usuarios.tsx`,
  * `gerenciador-modalidades.tsx`, `gerenciador-secretarias.tsx` e
  * `editor-fluxos.tsx` (achado da auditoria de UI/UX); esta é a única versão.
  */
 export function useAcao<T extends ResultadoAcao>() {
-  const router = useRouter();
   const [pendente, setPendente] = React.useState(false);
   const [erro, setErro] = React.useState<string | null>(null);
   const [aviso, setAviso] = React.useState<string | null>(null);
@@ -40,7 +38,6 @@ export function useAcao<T extends ResultadoAcao>() {
       setAviso(resultado.aviso);
     }
     aoConcluir?.();
-    router.refresh();
   }
 
   return { pendente, erro, setErro, aviso, executar };

@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 import { criarClienteServidor } from "@/lib/supabase/server";
 import { calcularDiasRestantes, categoriaPrazo, estaAtrasado, faseDoRequerimento } from "@/lib/requerimentos/status";
 import type { CategoriaPrazo, Fase } from "@/lib/requerimentos/status";
@@ -68,7 +70,11 @@ export async function listarRequerimentos(): Promise<RequerimentoDaLista[]> {
       .select("*")
       .order("recebido_em", { ascending: false }),
     supabase.from("requerimentos_secretarias").select("*"),
-    supabase.from("secretarias").select("*"),
+    // Mesma leitura (e mesma consulta) que a página já pede: com `cache()` sai uma ida ao banco só por requisição.
+    listarSecretarias().then(
+      (data) => ({ data, error: null }),
+      (error: unknown) => ({ data: null, error })
+    ),
     obterConfigPrazo(),
   ]);
 
@@ -150,7 +156,7 @@ export async function listarRequerimentos(): Promise<RequerimentoDaLista[]> {
   });
 }
 
-export async function listarSecretarias(): Promise<Secretaria[]> {
+export const listarSecretarias = cache(async (): Promise<Secretaria[]> => {
   const supabase = await criarClienteServidor();
   const { data, error } = await supabase.from("secretarias").select("*").order("nome");
   if (error) {
@@ -158,9 +164,9 @@ export async function listarSecretarias(): Promise<Secretaria[]> {
     throw new Error("Não foi possível carregar as secretarias.");
   }
   return data ?? [];
-}
+});
 
-export async function listarVereadores(): Promise<Vereador[]> {
+export const listarVereadores = cache(async (): Promise<Vereador[]> => {
   const supabase = await criarClienteServidor();
   const { data, error } = await supabase.from("vereadores").select("*").order("nome");
   if (error) {
@@ -168,9 +174,9 @@ export async function listarVereadores(): Promise<Vereador[]> {
     throw new Error("Não foi possível carregar os vereadores.");
   }
   return data ?? [];
-}
+});
 
-export async function obterConfigPrazo(): Promise<ConfigPrazo> {
+export const obterConfigPrazo = cache(async (): Promise<ConfigPrazo> => {
   const supabase = await criarClienteServidor();
   const { data, error } = await supabase.from("config_prazo").select("*").eq("id", 1).single();
   if (error) {
@@ -178,4 +184,4 @@ export async function obterConfigPrazo(): Promise<ConfigPrazo> {
     throw new Error("Não foi possível carregar a configuração de prazo.");
   }
   return data;
-}
+});

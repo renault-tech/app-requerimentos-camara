@@ -2,25 +2,14 @@
 
 import * as React from "react";
 import {
-  AlertTriangle,
-  ArrowRightCircle,
-  Ban,
-  CheckCheck,
-  FileStack,
-  Hourglass,
-  Inbox,
   Paperclip,
-  Search,
-  SlidersHorizontal,
   X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ModalExportar } from "@/components/ui/modal-exportar";
-import { BarraPrazo } from "@/components/requerimentos/barra-prazo";
 import { useAcao } from "@/lib/hooks/usar-acao";
-import { ESTILO_CAMPO_PADRAO as ESTILO_CAMPO, cn } from "@/lib/utils";
+import { ESTILO_CAMPO_PADRAO as ESTILO_CAMPO } from "@/lib/utils";
 import { criarClienteNavegador } from "@/lib/supabase/client";
 import {
   criarRequerimento,
@@ -34,21 +23,12 @@ import {
   type ResultadoRequerimento,
 } from "@/lib/actions/requerimentos";
 import type { AnexoDocumento, RequerimentoDaLista, SecretariaDoRequerimento } from "@/lib/dados/requerimentos";
-import type { Fase } from "@/lib/requerimentos/status";
-import {
-  COR_FASE,
-  COR_FASE_VIVA,
-  ROTULO_FASE,
-  COR_ATRASADO,
-  COR_ATRASADO_VIVA,
-} from "@/lib/requerimentos/cores-fase";
+import { ROTULO_FASE } from "@/lib/requerimentos/cores-fase";
 import { dataNoFuso } from "@/lib/fuso";
 import type { ColunaExportavel, GrupoTotalizacao } from "@/lib/exportar-xlsx";
-import type { ConfigPrazo, Secretaria, Usuario, Vereador } from "@/types/database";
+import type { Secretaria, Usuario, Vereador } from "@/types/database";
 
-type FiltroCartao = "todos" | "atrasados" | Fase;
-
-const EXPORT_COLS: ColunaExportavel<RequerimentoDaLista>[] = [
+export const EXPORT_COLS: ColunaExportavel<RequerimentoDaLista>[] = [
   { key: "numero", rotulo: "Nº", valor: (r) => r.numero },
   { key: "vereador", rotulo: "Vereador", valor: (r) => r.vereador },
   { key: "assunto", rotulo: "Assunto", valor: (r) => r.assunto },
@@ -73,7 +53,7 @@ const EXPORT_COLS: ColunaExportavel<RequerimentoDaLista>[] = [
   },
 ];
 
-const GRUPOS_TOTALIZACAO: GrupoTotalizacao<RequerimentoDaLista>[] = [
+export const GRUPOS_TOTALIZACAO: GrupoTotalizacao<RequerimentoDaLista>[] = [
   { chave: "fase", rotulo: "por Status", chavesDaLinha: (r) => [ROTULO_FASE[r.fase]] },
   {
     chave: "secretaria",
@@ -82,441 +62,7 @@ const GRUPOS_TOTALIZACAO: GrupoTotalizacao<RequerimentoDaLista>[] = [
   },
 ];
 
-export function PainelRequerimentos({
-  requerimentosIniciais,
-  secretarias,
-  vereadores,
-  config,
-  usuario,
-  podeDistribuir,
-  abrirId,
-}: {
-  requerimentosIniciais: RequerimentoDaLista[];
-  secretarias: Secretaria[];
-  vereadores: Vereador[];
-  config: ConfigPrazo;
-  usuario: Usuario;
-  podeDistribuir: boolean;
-  /** Requerimento a abrir já expandido (link de um aviso). */
-  abrirId?: string;
-}) {
-  const [busca, setBusca] = React.useState("");
-  const [filtro, setFiltro] = React.useState<FiltroCartao>("todos");
-  const [linhaExpandida, setLinhaExpandida] = React.useState<string | null>(abrirId ?? null);
-  React.useEffect(() => {
-    if (abrirId) document.getElementById(`req-${abrirId}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, [abrirId]);
-  const [modalNovoAberto, setModalNovoAberto] = React.useState(false);
-  const [exportarAberto, setExportarAberto] = React.useState(false);
-  const [mostrarMaisFiltros, setMostrarMaisFiltros] = React.useState(false);
-  const [secretariaFiltro, setSecretariaFiltro] = React.useState("");
-  const [vereadorFiltro, setVereadorFiltro] = React.useState("");
-  const [dataInicio, setDataInicio] = React.useState("");
-  const [dataFim, setDataFim] = React.useState("");
-
-  const requerimentos = requerimentosIniciais;
-
-  const contagens = React.useMemo(() => {
-    return {
-      todos: requerimentos.length,
-      atrasados: requerimentos.filter((r) => r.atrasado).length,
-      aguardando: requerimentos.filter((r) => r.fase === "aguardando").length,
-      distribuido: requerimentos.filter((r) => r.fase === "distribuido").length,
-      respondido: requerimentos.filter((r) => r.fase === "respondido").length,
-      devolvido: requerimentos.filter((r) => r.fase === "devolvido").length,
-      anulado: requerimentos.filter((r) => r.fase === "anulado").length,
-    };
-  }, [requerimentos]);
-
-  const visiveis = React.useMemo(() => {
-    let base = requerimentos;
-    if (filtro === "atrasados") base = base.filter((r) => r.atrasado);
-    else if (filtro !== "todos") base = base.filter((r) => r.fase === filtro);
-
-    if (secretariaFiltro) {
-      base = base.filter((r) => r.secretarias.some((s) => s.secretariaId === secretariaFiltro));
-    }
-    if (vereadorFiltro.trim()) {
-      const v = vereadorFiltro.trim().toLowerCase();
-      base = base.filter((r) => r.vereador.toLowerCase().includes(v));
-    }
-    if (dataInicio) base = base.filter((r) => r.recebidoEm >= dataInicio);
-    if (dataFim) base = base.filter((r) => r.recebidoEm <= dataFim);
-
-    const termo = busca.trim().toLowerCase();
-    if (!termo) return base;
-    return base.filter(
-      (r) =>
-        r.numero.toLowerCase().includes(termo) ||
-        r.vereador.toLowerCase().includes(termo) ||
-        r.assunto.toLowerCase().includes(termo)
-    );
-  }, [requerimentos, filtro, busca, secretariaFiltro, vereadorFiltro, dataInicio, dataFim]);
-
-  function limparMaisFiltros() {
-    setSecretariaFiltro("");
-    setVereadorFiltro("");
-    setDataInicio("");
-    setDataFim("");
-  }
-
-  function resumoFiltros(): string {
-    const partes: string[] = [];
-    if (busca) partes.push(`Busca: "${busca}"`);
-    if (filtro !== "todos") {
-      partes.push(`Status: ${filtro === "atrasados" ? "Atrasados" : ROTULO_FASE[filtro as Fase]}`);
-    }
-    if (secretariaFiltro) {
-      partes.push(`Secretaria: ${secretarias.find((s) => s.id === secretariaFiltro)?.nome ?? secretariaFiltro}`);
-    }
-    if (vereadorFiltro) partes.push(`Vereador: "${vereadorFiltro}"`);
-    if (dataInicio) partes.push(`De: ${dataInicio}`);
-    if (dataFim) partes.push(`Até: ${dataFim}`);
-    return partes.length > 0 ? partes.join(" · ") : "Nenhum filtro aplicado — todos os requerimentos visíveis";
-  }
-
-  function nomeArquivoBase(): string {
-    const data = dataNoFuso(new Date());
-    return `requerimentos-camara-${data}`;
-  }
-
-  const cartoes: {
-    chave: FiltroCartao;
-    rotulo: string;
-    cor: string;
-    corNumero: string;
-    valor: number;
-    Icone: typeof FileStack;
-  }[] = [
-    { chave: "todos", rotulo: "Todos", cor: "#0C1D33", corNumero: "#0C1D33", valor: contagens.todos, Icone: FileStack },
-    {
-      chave: "atrasados",
-      rotulo: "Atrasados",
-      cor: COR_ATRASADO_VIVA,
-      corNumero: COR_ATRASADO,
-      valor: contagens.atrasados,
-      Icone: AlertTriangle,
-    },
-    {
-      chave: "aguardando",
-      rotulo: ROTULO_FASE.aguardando,
-      cor: COR_FASE_VIVA.aguardando,
-      corNumero: COR_FASE.aguardando,
-      valor: contagens.aguardando,
-      Icone: Inbox,
-    },
-    {
-      chave: "distribuido",
-      rotulo: ROTULO_FASE.distribuido,
-      cor: COR_FASE_VIVA.distribuido,
-      corNumero: COR_FASE.distribuido,
-      valor: contagens.distribuido,
-      Icone: Hourglass,
-    },
-    {
-      chave: "respondido",
-      rotulo: ROTULO_FASE.respondido,
-      cor: COR_FASE_VIVA.respondido,
-      corNumero: COR_FASE.respondido,
-      valor: contagens.respondido,
-      Icone: ArrowRightCircle,
-    },
-    {
-      chave: "devolvido",
-      rotulo: ROTULO_FASE.devolvido,
-      cor: COR_FASE_VIVA.devolvido,
-      corNumero: COR_FASE.devolvido,
-      valor: contagens.devolvido,
-      Icone: CheckCheck,
-    },
-    {
-      chave: "anulado",
-      rotulo: ROTULO_FASE.anulado,
-      cor: COR_FASE_VIVA.anulado,
-      corNumero: COR_FASE.anulado,
-      valor: contagens.anulado,
-      Icone: Ban,
-    },
-  ];
-
-  return (
-    <div className="mt-5">
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-7">
-        {cartoes.map((c) => {
-          const ativo = filtro === c.chave;
-          return (
-            <button
-              key={c.chave}
-              type="button"
-              onClick={() => setFiltro(c.chave)}
-              aria-pressed={ativo}
-              style={{
-                borderColor: ativo ? `${c.cor}66` : "rgba(12,29,51,0.08)",
-                boxShadow: ativo
-                  ? `0 0 0 3px ${c.cor}22, 0 8px 20px rgba(12,29,51,0.1)`
-                  : "0 2px 8px rgba(12,29,51,0.04)",
-              }}
-              className={cn(
-                "group relative flex cursor-pointer flex-col items-start overflow-hidden rounded-2xl border p-3.5 text-left backdrop-blur-[10px] transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cataguases-azul focus-visible:ring-offset-2",
-                ativo ? "bg-white" : "bg-white/70 hover:-translate-y-0.5 hover:bg-white/95"
-              )}
-            >
-              <span
-                aria-hidden
-                className="absolute inset-x-0 top-0 h-[3px] transition-opacity duration-200"
-                style={{ backgroundColor: c.cor, opacity: ativo ? 1 : 0 }}
-              />
-              <span
-                className="flex h-8 w-8 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-105"
-                style={{ backgroundColor: `${c.cor}1F`, color: c.corNumero }}
-              >
-                <c.Icone className="h-4 w-4" strokeWidth={2.1} aria-hidden />
-              </span>
-              <p
-                className="mt-2.5 text-xl font-bold leading-none tracking-[-0.02em] tabular-nums"
-                style={{ color: c.corNumero }}
-              >
-                {c.valor}
-              </p>
-              <p
-                className={cn(
-                  "mt-1.5 text-[11px] font-medium leading-tight",
-                  ativo ? "text-cataguases-marinho" : "text-slate-500"
-                )}
-              >
-                {c.rotulo}
-              </p>
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="mt-4 flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-2.5 sm:flex-row sm:items-center">
-        <div className="relative min-w-[200px] flex-1">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
-          <input
-            type="search"
-            placeholder="Buscar por nº, vereador ou assunto…"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            className={`${ESTILO_CAMPO} w-full pl-8`}
-          />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setMostrarMaisFiltros((v) => !v)}
-            className={cn(mostrarMaisFiltros && "border-cataguases-azul text-cataguases-azul")}
-          >
-            <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
-            Mais filtros
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={visiveis.length === 0}
-            onClick={() => setExportarAberto(true)}
-          >
-            Exportar
-          </Button>
-          {podeDistribuir && (
-            <Button size="sm" onClick={() => setModalNovoAberto(true)} className="shrink-0">
-              Novo requerimento
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {mostrarMaisFiltros && (
-        <div className="mt-2 grid grid-cols-1 gap-2.5 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <label className="text-xs text-slate-500">Secretaria</label>
-            <select
-              value={secretariaFiltro}
-              onChange={(e) => setSecretariaFiltro(e.target.value)}
-              className={`${ESTILO_CAMPO} mt-1 w-full`}
-            >
-              <option value="">Todas</option>
-              {secretarias.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.nome}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs text-slate-500">Vereador</label>
-            <input
-              value={vereadorFiltro}
-              onChange={(e) => setVereadorFiltro(e.target.value)}
-              placeholder="Nome do vereador"
-              className={`${ESTILO_CAMPO} mt-1 w-full`}
-            />
-          </div>
-          <div>
-            <label className="text-xs text-slate-500">Recebido de</label>
-            <input
-              type="date"
-              value={dataInicio}
-              onChange={(e) => setDataInicio(e.target.value)}
-              className={`${ESTILO_CAMPO} mt-1 w-full`}
-            />
-          </div>
-          <div>
-            <label className="text-xs text-slate-500">Recebido até</label>
-            <input
-              type="date"
-              value={dataFim}
-              onChange={(e) => setDataFim(e.target.value)}
-              className={`${ESTILO_CAMPO} mt-1 w-full`}
-            />
-          </div>
-          <div className="sm:col-span-2 lg:col-span-4">
-            <Button variant="ghost" size="sm" onClick={limparMaisFiltros}>
-              Limpar filtros
-            </Button>
-          </div>
-        </div>
-      )}
-
-      <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table className="w-full min-w-[760px] text-sm">
-          <thead>
-            <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
-              <th className="px-3 py-2 font-medium">Nº</th>
-              <th className="px-3 py-2 font-medium">Vereador</th>
-              <th className="px-3 py-2 font-medium">Assunto</th>
-              <th className="px-3 py-2 font-medium">Secretarias</th>
-              <th className="px-3 py-2 font-medium">Prazo</th>
-              <th className="px-3 py-2 font-medium">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visiveis.map((r) => {
-              const expandida = linhaExpandida === r.id;
-              const anulado = r.fase === "anulado";
-              return (
-                <React.Fragment key={r.id}>
-                  <tr
-                    id={`req-${r.id}`}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setLinhaExpandida(expandida ? null : r.id)}
-                    onKeyDown={(e) => {
-                      if (e.target !== e.currentTarget) return;
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setLinhaExpandida(expandida ? null : r.id);
-                      }
-                    }}
-                    style={anulado ? { backgroundColor: "#F4F4F5" } : undefined}
-                    className="cursor-pointer border-b border-slate-100 align-top last:border-0 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cataguases-azul"
-                  >
-                    <td className={cn("px-3 py-2.5 font-mono text-xs", anulado && "text-slate-400 line-through")}>
-                      {r.numero}
-                    </td>
-                    <td className="px-3 py-2.5">{r.vereador}</td>
-                    <td className="max-w-[260px] break-words px-3 py-2.5">{r.assunto}</td>
-                    <td className="px-3 py-2.5">
-                      <div className="flex flex-wrap gap-1">
-                        {r.secretarias.length === 0 && (
-                          <span className="text-xs text-slate-400">—</span>
-                        )}
-                        {r.secretarias.map((s) => (
-                          // Três estados à vista do Gabinete: aguardando ciência,
-                          // ciente (deu ciência, ainda não respondeu) e respondida.
-                          <span
-                            key={s.id}
-                            title={
-                              s.respondidaEm
-                                ? `Respondida em ${s.respondidaEm.split("-").reverse().join("/")}`
-                                : s.cienciaEm
-                                  ? `Ciência em ${s.cienciaEm.split("-").reverse().join("/")} — aguardando resposta`
-                                  : "Aguardando ciência"
-                            }
-                            className={`rounded-full border px-2 py-0.5 text-[11px] ${
-                              s.respondidaEm
-                                ? "border-semaforo-verde/40 bg-semaforo-verde/10 text-green-800"
-                                : s.cienciaEm
-                                  ? "border-sky-300 bg-sky-50 text-sky-900"
-                                  : "border-dashed border-slate-300 bg-slate-100 text-slate-600"
-                            }`}
-                          >
-                            {s.respondidaEm ? "✓ " : s.cienciaEm ? "◉ " : "○ "}
-                            {s.nomeSecretaria}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <BarraPrazo prazo={r.prazo} />
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span
-                        className="rounded-full px-2 py-0.5 text-[11px] font-medium text-white"
-                        style={{ backgroundColor: COR_FASE[r.fase] }}
-                      >
-                        {ROTULO_FASE[r.fase]}
-                      </span>
-                    </td>
-                  </tr>
-                  {expandida && (
-                    <tr className="border-b border-slate-100 bg-slate-50/70 last:border-0">
-                      <td colSpan={6} className="px-4 py-4">
-                        <DetalheRequerimento
-                          requerimento={r}
-                          secretarias={secretarias}
-                          usuario={usuario}
-                          podeDistribuir={podeDistribuir}
-                        />
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
-            {visiveis.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-3 py-8 text-center text-sm text-slate-400">
-                  Nenhum requerimento encontrado.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <p className="mt-2 text-xs text-slate-400">
-        {visiveis.length} de {requerimentos.length} requerimentos · prazo padrão {config.prazo_padrao_dias} dias
-      </p>
-
-      {podeDistribuir && (
-        <ModalNovoRequerimento
-          aberto={modalNovoAberto}
-          onFechar={() => setModalNovoAberto(false)}
-          diasPadrao={config.prazo_padrao_dias}
-          vereadores={vereadores}
-        />
-      )}
-
-      <ModalExportar
-        key={exportarAberto ? "aberto" : "fechado"}
-        aberto={exportarAberto}
-        onFechar={() => setExportarAberto(false)}
-        tituloRelatorio="Requerimentos da Câmara — Prefeitura de Cataguases"
-        colunas={EXPORT_COLS}
-        linhasFiltradas={visiveis}
-        linhasTodas={requerimentos}
-        grupos={GRUPOS_TOTALIZACAO}
-        nomeArquivoBase={nomeArquivoBase()}
-        contextoAdicional={`Filtros aplicados: ${resumoFiltros()}`}
-      />
-    </div>
-  );
-}
-
-function DetalheRequerimento({
+export function DetalheRequerimento({
   requerimento,
   secretarias,
   usuario,
@@ -1300,7 +846,7 @@ function CampoVereador({
   );
 }
 
-function ModalNovoRequerimento({
+export function ModalNovoRequerimento({
   aberto,
   onFechar,
   diasPadrao,

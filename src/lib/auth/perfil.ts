@@ -13,18 +13,19 @@ export { RUTULO_PERFIL, PERFIS_SEM_SECRETARIA } from "@/lib/auth/rotulos";
 export const obterUsuarioAtual = cache(async (): Promise<Usuario | null> => {
   const supabase = await criarClienteServidor();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // O middleware já validou a sessão desta requisição com `getUser()` (ida ao servidor de Auth). Aqui basta o id:
+  // `getClaims()` confere a assinatura do token localmente e poupa uma segunda ida à rede a cada página.
+  const { data: claims } = await supabase.auth.getClaims();
+  const userId = claims?.claims?.sub;
 
-  if (!user) {
+  if (!userId) {
     return null;
   }
 
   const { data: usuario, error } = await supabase
     .from("usuarios")
     .select("*")
-    .eq("id", user.id)
+    .eq("id", userId)
     .single();
 
   if (error) {
