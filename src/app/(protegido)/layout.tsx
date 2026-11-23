@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { CabecalhoRequerimentos } from "@/components/layout/cabecalho-requerimentos";
 import { AjusteDeRolagem } from "@/components/modulo/ajuste-de-rolagem";
 import { AvisoConexao } from "@/components/modulo/estados-tela";
+import { BoasVindasDesign } from "@/components/ajuda/boas-vindas-design";
 import { SincronizarPreferencias } from "@/components/layout/sincronizar-preferencias";
 import { lerPreferencias } from "@/lib/dados/preferencias";
 import { obterUsuarioAtual, usuarioAtuaComoGabinete, RUTULO_PERFIL } from "@/lib/auth/perfil";
@@ -41,6 +42,7 @@ export default async function LayoutProtegido({ children }: { children: React.Re
   return (
     <div className="emd min-h-dvh bg-slate-50 print:bg-white" style={ESTILO_MODULO}>
       <SincronizarPreferencias salvas={preferencias} />
+      <BoasVindasDesign app="requerimentos" jaVisto={!!preferencias?.boasVindasVistas} />
       <CabecalhoRequerimentos
         usuario={{ id: usuario.id, nome: usuario.nome }}
         detalhe={`${RUTULO_PERFIL[usuario.perfil]}${gabinete && usuario.perfil === "secretaria" ? " (gabinete)" : ""}`}
